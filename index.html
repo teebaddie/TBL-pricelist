@@ -254,6 +254,7 @@ function buildFromStored(stored) {
   if (!stored) return sortedAlpha(clone(DEFAULT_SERVICES));
   const out = {};
   const order = stored.categories || Object.keys(DEFAULT_SERVICES);
+  // Load stored categories
   order.forEach(cat => {
     const s = stored.services && stored.services[cat];
     const defs = DEFAULT_SERVICES[cat] || [];
@@ -263,6 +264,10 @@ function buildFromStored(stored) {
         return def ? { ...def, price: Number(si.price) || 0 } : { name: si.name, price: Number(si.price) || 0 };
       });
     } else { out[cat] = clone(defs); }
+  });
+  // Merge in any new default categories not yet in storage
+  Object.keys(DEFAULT_SERVICES).forEach(cat => {
+    if (!out[cat]) out[cat] = clone(DEFAULT_SERVICES[cat]);
   });
   return sortedAlpha(out);
 }

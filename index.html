@@ -354,19 +354,25 @@ function App() {
   const [addForm, setAddForm] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await window.storage.get(STORAGE_KEY);
-        if (r?.value) {
-          setServices(buildServicesFromStorage(JSON.parse(r.value)));
+    // Real-time listener — all devices update instantly when admin saves
+    const unsub = db.collection("settings").doc(STORAGE_KEY)
+      .onSnapshot(async (doc) => {
+        if (doc.exists) {
+          try {
+            setServices(buildServicesFromStorage(JSON.parse(doc.data().value)));
+          } catch (_) { setServices(clone(DEFAULT_SERVICES)); }
         } else {
+          // First ever load — seed Firestore with defaults
           const fresh = clone(DEFAULT_SERVICES);
-          const payload = JSON.stringify({ categories: Object.keys(fresh), services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))])) });
-          await window.storage.set(STORAGE_KEY, payload);
+          const payload = JSON.stringify({
+            categories: Object.keys(fresh),
+            services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))]))
+          });
+          try { await db.collection("settings").doc(STORAGE_KEY).set({ value: payload }); } catch(_) {}
           setServices(fresh);
         }
-      } catch (_) { setServices(clone(DEFAULT_SERVICES)); }
-    })();
+      }, () => setServices(clone(DEFAULT_SERVICES)));
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -465,18 +471,32 @@ function App() {
       finalServices[cat] = items;
       storageServices[cat] = items.map(({ name, price }) => ({ name, price }));
     }
-    try { await window.storage.set(STORAGE_KEY, JSON.stringify({ categories: editData.catOrder, services: storageServices })); } catch (_) {}
-    setServices(finalServices);
-    setEditData({ catOrder: [...editData.catOrder], prices: clone(finalServices) });
-    setSaveStatus("saved"); setTimeout(() => setSaveStatus(""), 3000);
+    try {
+      await db.collection("settings").doc(STORAGE_KEY).set({
+        value: JSON.stringify({ categories: editData.catOrder, services: storageServices })
+      });
+      // onSnapshot will update services state automatically for all devices
+      setEditData({ catOrder: [...editData.catOrder], prices: clone(finalServices) });
+      setSaveStatus("saved");
+    } catch (e) {
+      setSaveStatus("error");
+      alert("Save failed: " + e.message);
+    }
+    setTimeout(() => setSaveStatus(""), 3000);
   };
 
   const handleReset = async () => {
-    try { await window.storage.delete(STORAGE_KEY); } catch (_) {}
     const fresh = clone(DEFAULT_SERVICES);
-    setServices(fresh);
-    setEditData({ catOrder: Object.keys(DEFAULT_SERVICES), prices: clone(fresh) });
-    setShowResetConfirm(false); setSaveStatus("saved"); setTimeout(() => setSaveStatus(""), 3000);
+    const payload = JSON.stringify({ categories: Object.keys(fresh), services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))])) });
+    try {
+      await db.collection("settings").doc(STORAGE_KEY).set({ value: payload });
+      setEditData({ catOrder: Object.keys(DEFAULT_SERVICES), prices: clone(fresh) });
+      setShowResetConfirm(false);
+      setSaveStatus("saved");
+    } catch(e) {
+      alert("Reset failed: " + e.message);
+    }
+    setTimeout(() => setSaveStatus(""), 3000);
   };
 
   const HEADER_H = 63;

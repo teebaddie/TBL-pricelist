@@ -34,7 +34,6 @@
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect, useCallback } = React;
 
-// ── Firestore REST API (no SDK needed) ──
 const FS_PROJECT = "tbl-pricelist";
 const FS_KEY = "AIzaSyA2ec8_5_sS3R1fU4lTEo_Kd9W11gNQ7Qo";
 const FS_DOC = `https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents/settings/prices`;
@@ -301,7 +300,7 @@ function serializeForStorage(catOrder, prices) {
   });
 }
 
-export default function App() {
+function App() {
   const [services, setServices] = useState(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState({});

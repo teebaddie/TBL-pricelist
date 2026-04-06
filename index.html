@@ -358,19 +358,17 @@ function App() {
     (async () => {
       try {
         // 1. Get initial data immediately
-        const doc = await db.collection("settings").doc(STORAGE_KEY).get();
+        const doc = await window.db.collection("settings").doc(STORAGE_KEY).get();
         if (doc.exists) {
           try { setServices(buildServicesFromStorage(JSON.parse(doc.data().value))); }
           catch (_) { setServices(clone(DEFAULT_SERVICES)); }
         } else {
-          // First ever load — seed Firestore with defaults
           const fresh = clone(DEFAULT_SERVICES);
           const payload = JSON.stringify({ categories: Object.keys(fresh), services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))])) });
-          try { await db.collection("settings").doc(STORAGE_KEY).set({ value: payload }); } catch (_) {}
+          try { await window.db.collection("settings").doc(STORAGE_KEY).set({ value: payload }); } catch (_) {}
           setServices(fresh);
         }
-        // 2. Then listen for real-time updates from other devices
-        unsub = db.collection("settings").doc(STORAGE_KEY).onSnapshot(snap => {
+        unsub = window.db.collection("settings").doc(STORAGE_KEY).onSnapshot(snap => {
           if (snap.exists) {
             try { setServices(buildServicesFromStorage(JSON.parse(snap.data().value))); } catch (_) {}
           }
@@ -480,7 +478,7 @@ function App() {
       storageServices[cat] = items.map(({ name, price }) => ({ name, price }));
     }
     try {
-      await db.collection("settings").doc(STORAGE_KEY).set({
+      await window.db.collection("settings").doc(STORAGE_KEY).set({
         value: JSON.stringify({ categories: editData.catOrder, services: storageServices })
       });
       // onSnapshot will update services state automatically for all devices
@@ -495,9 +493,13 @@ function App() {
 
   const handleReset = async () => {
     const fresh = clone(DEFAULT_SERVICES);
-    const payload = JSON.stringify({ categories: Object.keys(fresh), services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))])) });
+    const payload = JSON.stringify({
+      categories: Object.keys(fresh),
+      services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))]))
+    });
     try {
-      await db.collection("settings").doc(STORAGE_KEY).set({ value: payload });
+      await window.db.collection("settings").doc(STORAGE_KEY).set({ value: payload });
+      // onSnapshot will update services state automatically
       setEditData({ catOrder: Object.keys(DEFAULT_SERVICES), prices: clone(fresh) });
       setShowResetConfirm(false);
       setSaveStatus("saved");

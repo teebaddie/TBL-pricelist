@@ -4,14 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="TBL Prices">
-  <meta name="description" content="The Baddie Lab — Service Price Calculator">
   <title>The Baddie Lab — Price Calculator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;700&family=Poppins:wght@500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -24,56 +20,47 @@
 </head>
 <body>
 <div id="root"></div>
-
 <script>
-// ── localStorage storage API (same shape as window.storage) ──
-window.storage = {
-  get: async (key) => { try { const v = localStorage.getItem(key); return v != null ? {value:v} : null; } catch(e){return null;} },
-  set: async (key, value) => { try { localStorage.setItem(key, value); return {key,value}; } catch(e){return null;} },
-  delete: async (key) => { try { localStorage.removeItem(key); return {key,deleted:true}; } catch(e){return null;} }
-};
-
-// ── PWA Manifest ──
-(() => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#000"/><text x="256" y="190" text-anchor="middle" font-family="Georgia,serif" font-size="88" fill="#f3c2d7">THE</text><text x="256" y="310" text-anchor="middle" font-family="Georgia,serif" font-size="88" fill="#f3c2d7">BADDIE</text><text x="256" y="420" text-anchor="middle" font-family="Georgia,serif" font-size="80" fill="#f3c2d7">LAB</text></svg>`;
-  const icon = 'data:image/svg+xml,' + encodeURIComponent(svg);
-  const m = {name:"The Baddie Lab — Price Calculator",short_name:"TBL Prices",start_url:"./",display:"standalone",background_color:"#000000",theme_color:"#000000",icons:[{src:icon,sizes:"512x512",type:"image/svg+xml"},{src:icon,sizes:"192x192",type:"image/svg+xml"}]};
-  const ml = document.createElement('link'); ml.rel='manifest'; ml.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/json'})); document.head.appendChild(ml);
-  const al = document.createElement('link'); al.rel='apple-touch-icon'; al.href=icon; document.head.appendChild(al);
-})();
-
-// ── Service Worker (inlined as blob) ──
-if ('serviceWorker' in navigator) {
-  const swCode = `
-    const CACHE = 'tbl-v1';
-    self.addEventListener('install', () => self.skipWaiting());
-    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-    self.addEventListener('fetch', e => {
-      if (e.request.method !== 'GET') return;
-      e.respondWith(
-        caches.open(CACHE).then(cache =>
-          cache.match(e.request).then(cached => {
-            const network = fetch(e.request).then(res => {
-              cache.put(e.request, res.clone());
-              return res;
-            }).catch(() => cached);
-            return cached || network;
-          })
-        )
-      );
-    });
-  `;
-  const blob = new Blob([swCode], { type: 'application/javascript' });
-  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
-}
+  // PWA manifest
+  const _svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#000"/><text x="256" y="200" text-anchor="middle" font-family="Georgia,serif" font-size="80" fill="#f3c2d7">THE</text><text x="256" y="310" text-anchor="middle" font-family="Georgia,serif" font-size="80" fill="#f3c2d7">BADDIE</text><text x="256" y="410" text-anchor="middle" font-family="Georgia,serif" font-size="72" fill="#f3c2d7">LAB</text></svg>`;
+  const _icon = 'data:image/svg+xml,' + encodeURIComponent(_svg);
+  const _m = {name:"The Baddie Lab",short_name:"TBL Prices",start_url:"./",display:"standalone",background_color:"#000",theme_color:"#000",icons:[{src:_icon,sizes:"512x512",type:"image/svg+xml"}]};
+  const _ml = document.createElement('link'); _ml.rel='manifest'; _ml.href=URL.createObjectURL(new Blob([JSON.stringify(_m)],{type:'application/json'})); document.head.appendChild(_ml);
+  const _al = document.createElement('link'); _al.rel='apple-touch-icon'; _al.href=_icon; document.head.appendChild(_al);
+  // Inline service worker
+  if('serviceWorker' in navigator){const c=`const C='tbl-v2';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(clients.claim()));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.open(C).then(ca=>ca.match(e.request).then(h=>{const n=fetch(e.request).then(r=>{ca.put(e.request,r.clone());return r;}).catch(()=>h);return h||n;})));});`;navigator.serviceWorker.register(URL.createObjectURL(new Blob([c],{type:'application/javascript'}))).catch(()=>{});}
 </script>
 
 <script type="text/babel" data-presets="react">
-const { useState, useMemo, useEffect } = React;
+const { useState, useMemo, useEffect, useCallback } = React;
 
-// ── Initialize Firebase inside React scope so db is always defined ──
-if (!firebase.apps.length) firebase.initializeApp(window._firebaseConfig);
-const db = firebase.firestore();
+// ── Firestore REST API (no SDK needed) ──
+const FS_PROJECT = "tbl-pricelist";
+const FS_KEY = "AIzaSyA2ec8_5_sS3R1fU4lTEo_Kd9W11gNQ7Qo";
+const FS_DOC = `https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents/settings/prices`;
+
+async function fsGet() {
+  try {
+    const r = await fetch(`${FS_DOC}?key=${FS_KEY}`);
+    if (r.status === 404 || r.status === 400) return null;
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    return d.fields?.value?.stringValue ?? null;
+  } catch(e) { console.warn("fsGet error:", e); return null; }
+}
+
+async function fsSet(value) {
+  const r = await fetch(`${FS_DOC}?key=${FS_KEY}&updateMask.fieldPaths=value`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { value: { stringValue: value } } })
+  });
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(err);
+  }
+  return true;
+}
 
 const DEFAULT_SERVICES = {
   "Consultation": [
@@ -140,71 +127,50 @@ const DEFAULT_SERVICES = {
     { name: "Tirzepatide Level Five (15mg weekly, 4 inj)", price: 1000000 },
   ],
   "Mesotherapy": [
-    { name: "Armpit Bulge", price: 40000 },
-    { name: "Cheek Fat", price: 40000 },
-    { name: "Double Chin", price: 50000 },
-    { name: "Under Arms", price: 80000 },
-    { name: "Love Handles", price: 60000 },
-    { name: "Abdomen", price: 80000 },
-    { name: "Back Roll (1st roll)", price: 60000 },
-    { name: "Additional Roll", price: 20000 },
+    { name: "Armpit Bulge", price: 40000 },{ name: "Cheek Fat", price: 40000 },
+    { name: "Double Chin", price: 50000 },{ name: "Under Arms", price: 80000 },
+    { name: "Love Handles", price: 60000 },{ name: "Abdomen", price: 80000 },
+    { name: "Back Roll (1st roll)", price: 60000 },{ name: "Additional Roll", price: 20000 },
     { name: "Additional Bottle", price: 20000 },
   ],
   "Mesotherapy (Lemon Bottle)": [
-    { name: "Armpit Bulge (LB)", price: 50000 },
-    { name: "Cheek Fat (LB)", price: 60000 },
-    { name: "Double Chin (LB)", price: 75000 },
-    { name: "Under Arms (LB)", price: 140000 },
-    { name: "Love Handles (LB)", price: 100000 },
-    { name: "Abdomen (LB)", price: 135000 },
-    { name: "Back Roll 1st (LB)", price: 100000 },
-    { name: "Additional Roll (LB)", price: 30000 },
+    { name: "Armpit Bulge (LB)", price: 50000 },{ name: "Cheek Fat (LB)", price: 60000 },
+    { name: "Double Chin (LB)", price: 75000 },{ name: "Under Arms (LB)", price: 140000 },
+    { name: "Love Handles (LB)", price: 100000 },{ name: "Abdomen (LB)", price: 135000 },
+    { name: "Back Roll 1st (LB)", price: 100000 },{ name: "Additional Roll (LB)", price: 30000 },
     { name: "Additional Bottle (LB)", price: 30000 },
   ],
   "Fillers": [
-    { name: "Dermal Filler Package 2ml", price: 310000 },
-    { name: "Dermal Filler Package 3ml", price: 500000 },
-    { name: "Dermal Filler Package 4ml", price: 650000 },
-    { name: "Dermal Filler Package 5ml", price: 810000 },
-    { name: "Nasolabial Folds 1ml", price: 150000 },
-    { name: "Nasolabial Folds 2ml", price: 290000 },
-    { name: "Chin Enhancement 1ml", price: 150000 },
-    { name: "Chin Enhancement 2ml", price: 290000 },
-    { name: "Non-Surgical Nose Job", price: 150000 },
-    { name: "Non-Surgical Nose Job + Lip Combo", price: 290000 },
-    { name: "Tear Troughs (Sunken Eyes)", price: 180000 },
-    { name: "Lip Enhancement", price: 150000 },
-    { name: "Filler Dissolving (starts at)", price: 30000 },
-    { name: "Injection of Outside Fillers", price: 40000 },
+    { name: "Dermal Filler Package 2ml", price: 310000 },{ name: "Dermal Filler Package 3ml", price: 500000 },
+    { name: "Dermal Filler Package 4ml", price: 650000 },{ name: "Dermal Filler Package 5ml", price: 810000 },
+    { name: "Nasolabial Folds 1ml", price: 150000 },{ name: "Nasolabial Folds 2ml", price: 290000 },
+    { name: "Chin Enhancement 1ml", price: 150000 },{ name: "Chin Enhancement 2ml", price: 290000 },
+    { name: "Non-Surgical Nose Job", price: 150000 },{ name: "Non-Surgical Nose Job + Lip Combo", price: 290000 },
+    { name: "Tear Troughs (Sunken Eyes)", price: 180000 },{ name: "Lip Enhancement", price: 150000 },
+    { name: "Filler Dissolving (starts at)", price: 30000 },{ name: "Injection of Outside Fillers", price: 40000 },
     { name: "Injection of New Area at Follow Up", price: 40000 },
   ],
   "Liquid BBL": [
-    { name: "Liquid BBL 200ml", price: 900000 },
-    { name: "Liquid BBL 400ml", price: 1500000 },
+    { name: "Liquid BBL 200ml", price: 900000 },{ name: "Liquid BBL 400ml", price: 1500000 },
     { name: "Liquid BBL 600ml + Hip Dip Special", price: 2000000 },
   ],
   "Botox": [
     { name: "Anti-Aging Wrinkle Reducer (per unit, min 20)", price: 5000 },
-    { name: "Masseter Slimming 50 units", price: 140000 },
-    { name: "Masseter Slimming 100 units", price: 390000 },
-    { name: "Masseter Touch Up", price: 140000 },
-    { name: "Gummy Smile", price: 100000 },
+    { name: "Masseter Slimming 50 units", price: 140000 },{ name: "Masseter Slimming 100 units", price: 390000 },
+    { name: "Masseter Touch Up", price: 140000 },{ name: "Gummy Smile", price: 100000 },
   ],
   "Body Sculpting & Sauna": [
     { name: '"Baddie" Sculpting 1hr Session', price: 45000 },
     { name: '"Baddie" Sculpting + Sauna Blanket', price: 55000 },
-    { name: "Sauna Blanket 30 mins", price: 20000 },
-    { name: "Sauna Blanket 1 hour", price: 35000 },
+    { name: "Sauna Blanket 30 mins", price: 20000 },{ name: "Sauna Blanket 1 hour", price: 35000 },
     { name: "Sauna Blanket 1hr 30 mins", price: 45000 },
   ],
   "Other Services": [
     { name: "Post-OP Lymphatic Drainage Massage", price: 45000 },
     { name: '"The Cookie Reset" Vaginal Rejuvenation', price: 75000 },
-    { name: "Teeth Whitening – Gold", price: 40000 },
-    { name: "Teeth Whitening – Diamond", price: 50000 },
+    { name: "Teeth Whitening – Gold", price: 40000 },{ name: "Teeth Whitening – Diamond", price: 50000 },
     { name: "Numbing Cream (per area)", price: 10000 },
-    { name: "VIP Room – Single Person", price: 15000 },
-    { name: "VIP Room – Couple", price: 25000 },
+    { name: "VIP Room – Single Person", price: 15000 },{ name: "VIP Room – Couple", price: 25000 },
   ],
   "Home Service": [
     { name: "Home Service – Within Lekki Phase 1", price: 50000 },
@@ -212,24 +178,18 @@ const DEFAULT_SERVICES = {
     { name: "Home Service – Mainland", price: 200000 },
   ],
   "Facials (Intro Pricing)": [
-    { name: "Routine Facial (60 mins) – Intro", price: 32000 },
-    { name: "Acne Facial (60 mins) – Intro", price: 38000 },
-    { name: "Vitamin C Facial (60 mins) – Intro", price: 38000 },
-    { name: "Brightening Facial (75 mins) – Intro", price: 48000 },
+    { name: "Routine Facial (60 mins) – Intro", price: 32000 },{ name: "Acne Facial (60 mins) – Intro", price: 38000 },
+    { name: "Vitamin C Facial (60 mins) – Intro", price: 38000 },{ name: "Brightening Facial (75 mins) – Intro", price: 48000 },
     { name: "Microdermabrasion Facial (60 mins) – Intro", price: 34000 },
     { name: "Dermaplaning Standalone (30 mins) – Intro", price: 28000 },
-    { name: "Gentleman's Facial (60 mins) – Intro", price: 40000 },
-    { name: "Dermaplaning Add-On – Intro", price: 10000 },
+    { name: "Gentleman's Facial (60 mins) – Intro", price: 40000 },{ name: "Dermaplaning Add-On – Intro", price: 10000 },
   ],
   "Facials (Regular Pricing)": [
-    { name: "Routine Facial (60 mins)", price: 40000 },
-    { name: "Acne Facial (60 mins)", price: 48000 },
-    { name: "Vitamin C Facial (60 mins)", price: 48000 },
-    { name: "Brightening Facial (75 mins)", price: 60000 },
+    { name: "Routine Facial (60 mins)", price: 40000 },{ name: "Acne Facial (60 mins)", price: 48000 },
+    { name: "Vitamin C Facial (60 mins)", price: 48000 },{ name: "Brightening Facial (75 mins)", price: 60000 },
     { name: "Microdermabrasion Facial (60 mins)", price: 42000 },
     { name: "Dermaplaning Standalone (30 mins)", price: 45000 },
-    { name: "Gentleman's Facial (60 mins)", price: 49000 },
-    { name: "Dermaplaning Add-On", price: 20000 },
+    { name: "Gentleman's Facial (60 mins)", price: 49000 },{ name: "Dermaplaning Add-On", price: 20000 },
   ],
   "Massage (Intro Pricing)": [
     { name: "Swedish Massage – Back Only (30 mins) – Intro", price: 25000 },
@@ -312,39 +272,43 @@ const DEFAULT_SERVICES = {
 };
 
 const ADMIN_PASSWORD = "TBL@2025";
-const STORAGE_KEY = "tbl_prices_v2";
 const PINK = "#f3c2d7";
 const VAT_RATE = 0.075;
 const fmt = n => "₦" + Math.max(0, Number(n)).toLocaleString("en-NG", { minimumFractionDigits: 2 });
 const clone = o => JSON.parse(JSON.stringify(o));
 
-function buildServicesFromStorage(storedData) {
-  if (!storedData) return clone(DEFAULT_SERVICES);
+function buildFromStored(stored) {
+  if (!stored) return clone(DEFAULT_SERVICES);
   const out = {};
-  const order = storedData.categories || Object.keys(DEFAULT_SERVICES);
+  const order = stored.categories || Object.keys(DEFAULT_SERVICES);
   for (const cat of order) {
-    const stored = storedData.services?.[cat];
+    const s = stored.services?.[cat];
     const defs = DEFAULT_SERVICES[cat] || [];
-    if (stored && Array.isArray(stored)) {
-      out[cat] = stored.map(si => {
+    if (s && Array.isArray(s)) {
+      out[cat] = s.map(si => {
         const def = defs.find(d => d.name === si.name);
         return def ? { ...def, price: Number(si.price) || 0 } : { name: si.name, price: Number(si.price) || 0 };
       });
-    } else {
-      out[cat] = clone(defs);
-    }
+    } else { out[cat] = clone(defs); }
   }
   return out;
 }
 
-function App() {
+function serializeForStorage(catOrder, prices) {
+  return JSON.stringify({
+    categories: catOrder,
+    services: Object.fromEntries(catOrder.map(cat => [cat, (prices[cat] || []).map(({ name, price }) => ({ name, price }))]))
+  });
+}
+
+export default function App() {
   const [services, setServices] = useState(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState({});
   const [openCat, setOpenCat] = useState(null);
   const [activeTab, setActiveTab] = useState("select");
   const [discounts, setDiscounts] = useState([{ id: 1, value: "", type: "naira" }]);
-  const [suppressConsultDiscount, setSuppressConsultDiscount] = useState(false);
+  const [suppressConsult, setSuppressConsult] = useState(false);
   const [showBackTop, setShowBackTop] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
@@ -357,33 +321,27 @@ function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [addForm, setAddForm] = useState(null);
 
-  useEffect(() => {
-    let unsub = null;
-    (async () => {
-      try {
-        // 1. Get initial data immediately
-        const doc = await db.collection("settings").doc(STORAGE_KEY).get();
-        if (doc.exists) {
-          try { setServices(buildServicesFromStorage(JSON.parse(doc.data().value))); }
-          catch (_) { setServices(clone(DEFAULT_SERVICES)); }
-        } else {
-          const fresh = clone(DEFAULT_SERVICES);
-          const payload = JSON.stringify({ categories: Object.keys(fresh), services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))])) });
-          try { await db.collection("settings").doc(STORAGE_KEY).set({ value: payload }); } catch (_) {}
-          setServices(fresh);
-        }
-        unsub = db.collection("settings").doc(STORAGE_KEY).onSnapshot(snap => {
-          if (snap.exists) {
-            try { setServices(buildServicesFromStorage(JSON.parse(snap.data().value))); } catch (_) {}
-          }
-        }, () => {}); // silently ignore listener errors
-      } catch (_) {
-        // Offline or Firestore error — fall back to defaults
-        setServices(clone(DEFAULT_SERVICES));
-      }
-    })();
-    return () => { if (unsub) unsub(); };
+  const loadServices = useCallback(async () => {
+    const val = await fsGet();
+    if (val) {
+      try { setServices(buildFromStored(JSON.parse(val))); }
+      catch { setServices(clone(DEFAULT_SERVICES)); }
+    } else {
+      const fresh = clone(DEFAULT_SERVICES);
+      try { await fsSet(serializeForStorage(Object.keys(fresh), fresh)); } catch {}
+      setServices(fresh);
+    }
   }, []);
+
+  useEffect(() => {
+    loadServices();
+    // Refresh every 30s so all devices see updates
+    const iv = setInterval(loadServices, 30000);
+    // Also refresh when user returns to the app
+    const onVis = () => { if (!document.hidden) loadServices(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, [loadServices]);
 
   useEffect(() => {
     const fn = () => setShowBackTop(window.scrollY > 300);
@@ -393,168 +351,163 @@ function App() {
 
   useEffect(() => {
     if (!services) return;
-    const hasConsult = Object.entries(selected).some(([key]) => {
-      const [cat, idx] = key.split("|||");
+    const has = Object.entries(selected).some(([k]) => {
+      const [cat, idx] = k.split("|||");
       return services[cat]?.[Number(idx)]?.autoDiscount;
     });
-    if (!hasConsult) setSuppressConsultDiscount(false);
+    if (!has) setSuppressConsult(false);
   }, [selected, services]);
 
   const toggleCat = cat => setOpenCat(p => p === cat ? null : cat);
-  const toggleService = (cat, idx) => {
+  const toggleSvc = (cat, idx) => {
     const key = `${cat}|||${idx}`;
-    setSelected(p => { const n = { ...p }; n[key] ? delete n[key] : (n[key] = { cat, idx, qty: 1 }); return n; });
+    setSelected(p => { const n = {...p}; n[key] ? delete n[key] : (n[key] = {cat, idx, qty: 1}); return n; });
   };
-  const updateQty = (key, delta) => setSelected(p => {
-    const n = { ...p }; if (!n[key]) return n;
-    const q = n[key].qty + delta;
-    if (q <= 0) delete n[key]; else n[key] = { ...n[key], qty: q }; return n;
+  const updateQty = (key, d) => setSelected(p => {
+    const n = {...p}; if (!n[key]) return n;
+    const q = n[key].qty + d;
+    if (q <= 0) delete n[key]; else n[key] = {...n[key], qty: q};
+    return n;
   });
 
-  const selectedItems = useMemo(() =>
-    !services ? [] : Object.entries(selected).map(([key, { cat, idx, qty }]) => ({
-      key, cat, qty, service: services[cat]?.[idx],
-    })).filter(x => x.service),
-    [selected, services]
-  );
+  const selItems = useMemo(() =>
+    !services ? [] : Object.entries(selected).map(([key, {cat, idx, qty}]) => ({
+      key, cat, qty, service: services[cat]?.[idx]
+    })).filter(x => x.service), [selected, services]);
 
-  const subtotal = selectedItems.reduce((s, { service, qty }) => s + service.price * qty, 0);
+  const subtotal = selItems.reduce((s, {service, qty}) => s + service.price * qty, 0);
   const vat = Math.round(subtotal * VAT_RATE);
-  const totalAfterVat = subtotal + vat;
-  const hasNonConsult = selectedItems.some(({ service }) => !service.isConsultation);
-  const hasConsultWithAutoDiscount = selectedItems.some(({ service }) => service.autoDiscount);
-  const consultDiscount = (!suppressConsultDiscount && hasNonConsult)
-    ? selectedItems.reduce((s, { service, qty }) => s + (service.autoDiscount || 0) * qty, 0) : 0;
-  const manualDiscount = discounts.reduce((s, d) => {
+  const totalVat = subtotal + vat;
+  const hasNonConsult = selItems.some(({service}) => !service.isConsultation);
+  const hasAutoDiscount = selItems.some(({service}) => service.autoDiscount);
+  const consultDisc = (!suppressConsult && hasNonConsult)
+    ? selItems.reduce((s, {service, qty}) => s + (service.autoDiscount || 0) * qty, 0) : 0;
+  const manualDisc = discounts.reduce((s, d) => {
     const v = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
-    return s + (d.type === "percent" ? Math.round((v / 100) * totalAfterVat) : v);
+    return s + (d.type === "percent" ? Math.round((v / 100) * totalVat) : v);
   }, 0);
-  const totalDiscount = consultDiscount + manualDiscount;
-  const finalTotal = Math.max(0, totalAfterVat - totalDiscount);
+  const totalDisc = consultDisc + manualDisc;
+  const finalTotal = Math.max(0, totalVat - totalDisc);
 
-  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsultDiscount(false); };
-  const addDiscount = () => setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]);
+  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{id:1,value:"",type:"naira"}]); setSuppressConsult(false); };
+  const addDiscount = () => setDiscounts(p => [...p, {id: Date.now(), value: "", type: "naira"}]);
   const removeDiscount = id => setDiscounts(p => p.filter(d => d.id !== id));
-  const updateDiscount = (id, f, v) => setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d));
+  const updateDiscount = (id, f, v) => setDiscounts(p => p.map(d => d.id === id ? {...d, [f]: v, ...(f==="type"?{value:""}:{})} : d));
 
-  const filteredServices = useMemo(() => {
+  const filteredSvcs = useMemo(() => {
     if (!services || !search.trim()) return null;
     const q = search.toLowerCase();
     const res = [];
     for (const [cat, items] of Object.entries(services))
-      items.forEach((s, idx) => s.name.toLowerCase().includes(q) && res.push({ cat, idx, service: s }));
+      items.forEach((s, idx) => s.name.toLowerCase().includes(q) && res.push({cat, idx, service: s}));
     return res;
   }, [search, services]);
 
-  const handleLockClick = () => {
+  const handleLock = () => {
     if (isAdmin) { setIsAdmin(false); setEditData(null); setAdminSearch(""); setAddForm(null); setActiveTab("select"); }
     else { setPwInput(""); setPwError(""); setShowPwModal(true); }
   };
-  const handlePwSubmit = () => {
+  const handlePw = () => {
     if (pwInput === ADMIN_PASSWORD) {
       setIsAdmin(true); setShowPwModal(false); setPwInput(""); setPwError("");
       setEditData({ catOrder: Object.keys(services), prices: clone(services) });
       setActiveTab("admin");
     } else { setPwError("Incorrect password."); }
   };
+
   const setPrice = (cat, idx, val) => setEditData(p => { const n = clone(p); n.prices[cat][idx].price = val; return n; });
-  const deleteService = (cat, idx) => setEditData(p => { const n = clone(p); n.prices[cat].splice(idx, 1); return n; });
-  const addService = (cat) => {
-    if (!addForm || addForm.cat !== cat) return;
-    const name = addForm.name.trim(); if (!name) return;
+  const deleteSvc = (cat, idx) => setEditData(p => { const n = clone(p); n.prices[cat].splice(idx, 1); return n; });
+  const addSvc = (cat) => {
+    if (!addForm || addForm.cat !== cat || !addForm.name.trim()) return;
     const price = parseInt(String(addForm.price).replace(/[^0-9]/g, ""), 10) || 0;
-    setEditData(p => { const n = clone(p); if (!n.prices[cat]) n.prices[cat] = []; n.prices[cat].push({ name, price }); return n; });
+    setEditData(p => { const n = clone(p); if (!n.prices[cat]) n.prices[cat] = []; n.prices[cat].push({name: addForm.name.trim(), price}); return n; });
     setAddForm(null);
   };
   const moveCat = (idx, dir) => setEditData(p => {
     const n = clone(p); const o = [...n.catOrder]; const t = idx + dir;
     if (t < 0 || t >= o.length) return p;
-    [o[idx], o[t]] = [o[t], o[idx]]; return { ...n, catOrder: o };
+    [o[idx], o[t]] = [o[t], o[idx]]; return {...n, catOrder: o};
   });
-  const sortAlpha = () => setEditData(p => ({ ...p, catOrder: [...p.catOrder].sort((a, b) => a.localeCompare(b)) }));
+  const sortAlpha = () => setEditData(p => ({...p, catOrder: [...p.catOrder].sort((a,b) => a.localeCompare(b))}));
 
   const handleSave = async () => {
     if (!editData) return;
-    const finalServices = {}, storageServices = {};
+    const finalSvcs = {};
     for (const cat of editData.catOrder) {
-      const items = (editData.prices[cat] || []).map(item => ({ ...item, price: parseInt(String(item.price).replace(/[^0-9]/g, ""), 10) || 0 }));
-      finalServices[cat] = items;
-      storageServices[cat] = items.map(({ name, price }) => ({ name, price }));
+      finalSvcs[cat] = (editData.prices[cat] || []).map(item => ({
+        ...item, price: parseInt(String(item.price).replace(/[^0-9]/g, ""), 10) || 0
+      }));
     }
     try {
-      await db.collection("settings").doc(STORAGE_KEY).set({
-        value: JSON.stringify({ categories: editData.catOrder, services: storageServices })
-      });
-      // onSnapshot will update services state automatically for all devices
-      setEditData({ catOrder: [...editData.catOrder], prices: clone(finalServices) });
+      await fsSet(serializeForStorage(editData.catOrder, finalSvcs));
+      setServices(finalSvcs);
+      setEditData({catOrder: [...editData.catOrder], prices: clone(finalSvcs)});
       setSaveStatus("saved");
-    } catch (e) {
-      setSaveStatus("error");
+    } catch(e) {
       alert("Save failed: " + e.message);
+      setSaveStatus("error");
     }
     setTimeout(() => setSaveStatus(""), 3000);
   };
 
   const handleReset = async () => {
     const fresh = clone(DEFAULT_SERVICES);
-    const payload = JSON.stringify({
-      categories: Object.keys(fresh),
-      services: Object.fromEntries(Object.entries(fresh).map(([cat, items]) => [cat, items.map(({ name, price }) => ({ name, price }))]))
-    });
     try {
-      await db.collection("settings").doc(STORAGE_KEY).set({ value: payload });
-      // onSnapshot will update services state automatically
-      setEditData({ catOrder: Object.keys(DEFAULT_SERVICES), prices: clone(fresh) });
+      await fsSet(serializeForStorage(Object.keys(fresh), fresh));
+      setServices(fresh);
+      setEditData({catOrder: Object.keys(DEFAULT_SERVICES), prices: clone(fresh)});
       setShowResetConfirm(false);
       setSaveStatus("saved");
-    } catch(e) {
-      alert("Reset failed: " + e.message);
-    }
+    } catch(e) { alert("Reset failed: " + e.message); }
     setTimeout(() => setSaveStatus(""), 3000);
   };
 
-  const HEADER_H = 63;
-  const btn = { fontFamily: "inherit", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  const H = 63;
+  const b = {fontFamily:"inherit", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center"};
 
   if (!services) return (
-    <div style={{ fontFamily: "'Poppins',sans-serif", minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
+    <div style={{fontFamily:"'Poppins',sans-serif", minHeight:"100vh", background:"#000", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:18}}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, color: PINK, letterSpacing: 2 }}>THE BADDIE LAB</div>
-      <div style={{ width: 28, height: 28, border: "2px solid rgba(243,194,215,0.2)", borderTopColor: PINK, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase" }}>Loading…</div>
+      <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:22, color:PINK, letterSpacing:2}}>THE BADDIE LAB</div>
+      <div style={{width:28, height:28, border:"2px solid rgba(243,194,215,0.2)", borderTopColor:PINK, borderRadius:"50%", animation:"spin 0.8s linear infinite"}}/>
+      <div style={{fontSize:11, color:"#555", letterSpacing:2, textTransform:"uppercase"}}>Loading…</div>
     </div>
   );
 
   return (
-    <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 500, minHeight: "100vh", background: "#000", color: "#fff" }}>
+    <div style={{fontFamily:"'Poppins',sans-serif", fontWeight:500, minHeight:"100vh", background:"#000", color:"#fff"}}>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#000}::-webkit-scrollbar-thumb{background:#f3c2d7;border-radius:2px}
-        .cat-hdr:hover{background:rgba(243,194,215,0.09)!important}
-        .svc-row:hover{background:rgba(243,194,215,0.06)!important}
-        .tab-btn{transition:all 0.2s}.tab-btn:hover{opacity:0.8}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#f3c2d7;border-radius:2px}
+        .ch:hover{background:rgba(243,194,215,0.09)!important}
+        .sr:hover{background:rgba(243,194,215,0.06)!important}
         input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
-        input::placeholder{color:#555}
-        .fi:focus{border-color:#f3c2d7!important;outline:none}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:999;display:flex;align-items:center;justify-content:center}
-        .move-btn:hover:not(:disabled){background:rgba(243,194,215,0.12)!important;border-color:#f3c2d7!important}
-        .del-btn:hover{background:rgba(255,80,80,0.18)!important;color:#ff7070!important}
-        .back-top:hover{background:#f3c2d7!important;color:#000!important}
+        input::placeholder{color:#555}.fi:focus{border-color:#f3c2d7!important;outline:none}
+        .ov{position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:999;display:flex;align-items:center;justify-content:center}
+        .mb:hover:not(:disabled){background:rgba(243,194,215,0.12)!important;border-color:#f3c2d7!important}
+        .db:hover{background:rgba(255,80,80,0.18)!important;color:#ff7070!important}
+        .bt:hover{background:#f3c2d7!important;color:#000!important}
       `}</style>
 
       {/* HEADER */}
-      <div style={{ background:"#000", borderBottom:"1px solid rgba(243,194,215,0.3)", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100, gap:8 }}>
-        <div style={{ flexShrink:0 }}>
-          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:19, color:PINK, letterSpacing:1 }}>THE BADDIE LAB</div>
-          <div style={{ fontSize:8, color:"#555", letterSpacing:2, textTransform:"uppercase", marginTop:1 }}>Service Price Calculator · Updated 28 Mar 2026</div>
+      <div style={{background:"#000", borderBottom:"1px solid rgba(243,194,215,0.3)", padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100, gap:8}}>
+        <div style={{flexShrink:0}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:19, color:PINK, letterSpacing:1}}>THE BADDIE LAB</div>
+          <div style={{fontSize:8, color:"#555", letterSpacing:2, textTransform:"uppercase", marginTop:1}}>Service Price Calculator · Updated 28 Mar 2026</div>
         </div>
-        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-          {["select","checkout",...(isAdmin?["admin"]:[])] .map(t => (
-            <button key={t} className="tab-btn" onClick={() => setActiveTab(t)} style={{ ...btn, padding:"7px 13px", borderRadius:20, border:"1px solid", fontSize:11, letterSpacing:0.5, textTransform:"uppercase", whiteSpace:"nowrap", background:activeTab===t?(t==="admin"?"#c0392b":PINK):"transparent", borderColor:activeTab===t?(t==="admin"?"#c0392b":PINK):(t==="admin"?"#c0392b":"#333"), color:activeTab===t?"#000":(t==="admin"?"#c0392b":"#888") }}>
-              {t==="checkout"?`Bill (${selectedItems.length})`:t==="admin"?"⚙ Prices":"Services"}
+        <div style={{display:"flex", gap:6, alignItems:"center"}}>
+          {["select","checkout",...(isAdmin?["admin"]:[])].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{...b, padding:"7px 13px", borderRadius:20, border:"1px solid", fontSize:11, letterSpacing:0.5, textTransform:"uppercase", whiteSpace:"nowrap",
+              background:activeTab===t?(t==="admin"?"#c0392b":PINK):"transparent",
+              borderColor:activeTab===t?(t==="admin"?"#c0392b":PINK):(t==="admin"?"#c0392b":"#333"),
+              color:activeTab===t?"#000":(t==="admin"?"#c0392b":"#888")}}>
+              {t==="checkout"?`Bill (${selItems.length})`:t==="admin"?"⚙ Prices":"Services"}
             </button>
           ))}
-          <button onClick={handleLockClick} title={isAdmin?"Lock":"Admin"} style={{ ...btn, flexShrink:0, width:34, height:34, borderRadius:"50%", border:`1.5px solid ${isAdmin?"#c0392b":"rgba(243,194,215,0.45)"}`, background:isAdmin?"rgba(192,57,43,0.15)":"rgba(243,194,215,0.07)", color:isAdmin?"#c0392b":PINK, fontSize:14 }}>
+          <button onClick={handleLock} style={{...b, flexShrink:0, width:34, height:34, borderRadius:"50%",
+            border:`1.5px solid ${isAdmin?"#c0392b":"rgba(243,194,215,0.45)"}`,
+            background:isAdmin?"rgba(192,57,43,0.15)":"rgba(243,194,215,0.07)",
+            color:isAdmin?"#c0392b":PINK, fontSize:14}}>
             {isAdmin?"🔓":"🔒"}
           </button>
         </div>
@@ -562,30 +515,30 @@ function App() {
 
       {/* PASSWORD MODAL */}
       {showPwModal && (
-        <div className="overlay" onClick={() => { setShowPwModal(false); setPwInput(""); setPwError(""); }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:"#111", border:`1px solid rgba(243,194,215,0.3)`, borderRadius:16, padding:32, width:"100%", maxWidth:360, margin:"0 16px" }}>
-            <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:PINK, marginBottom:6 }}>Admin Access</div>
-            <div style={{ fontSize:12, color:"#555", marginBottom:22 }}>Enter the admin password to edit service prices.</div>
-            <input type="password" autoFocus value={pwInput} onChange={e => { setPwInput(e.target.value); setPwError(""); }} onKeyDown={e => e.key==="Enter"&&handlePwSubmit()} placeholder="Password" className="fi"
-              style={{ width:"100%", padding:"12px 14px", background:"#000", border:`1px solid ${pwError?"#c0392b":"#2a2a2a"}`, borderRadius:8, color:"#fff", fontSize:14, fontFamily:"inherit", marginBottom:pwError?6:16 }} />
-            {pwError && <div style={{ fontSize:12, color:"#c0392b", marginBottom:14 }}>{pwError}</div>}
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={() => { setShowPwModal(false); setPwInput(""); setPwError(""); }} style={{ ...btn, flex:1, padding:11, background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:13 }}>Cancel</button>
-              <button onClick={handlePwSubmit} style={{ ...btn, flex:2, padding:11, background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:13, fontWeight:700 }}>Unlock</button>
+        <div className="ov" onClick={() => {setShowPwModal(false);setPwInput("");setPwError("");}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#111", border:`1px solid rgba(243,194,215,0.3)`, borderRadius:16, padding:32, width:"100%", maxWidth:360, margin:"0 16px"}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:20, color:PINK, marginBottom:6}}>Admin Access</div>
+            <div style={{fontSize:12, color:"#555", marginBottom:22}}>Enter the admin password to edit prices.</div>
+            <input type="password" autoFocus value={pwInput} onChange={e=>{setPwInput(e.target.value);setPwError("");}} onKeyDown={e=>e.key==="Enter"&&handlePw()} placeholder="Password" className="fi"
+              style={{width:"100%", padding:"12px 14px", background:"#000", border:`1px solid ${pwError?"#c0392b":"#2a2a2a"}`, borderRadius:8, color:"#fff", fontSize:14, fontFamily:"inherit", marginBottom:pwError?6:16}}/>
+            {pwError && <div style={{fontSize:12, color:"#c0392b", marginBottom:14}}>{pwError}</div>}
+            <div style={{display:"flex", gap:10}}>
+              <button onClick={()=>{setShowPwModal(false);setPwInput("");setPwError("");}} style={{...b, flex:1, padding:11, background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:13}}>Cancel</button>
+              <button onClick={handlePw} style={{...b, flex:2, padding:11, background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:13, fontWeight:700}}>Unlock</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* RESET CONFIRM */}
+      {/* RESET MODAL */}
       {showResetConfirm && (
-        <div className="overlay" onClick={() => setShowResetConfirm(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background:"#111", border:"1px solid rgba(192,57,43,0.4)", borderRadius:16, padding:32, width:"100%", maxWidth:360, margin:"0 16px" }}>
-            <div style={{ fontSize:16, color:"#fff", marginBottom:10, fontWeight:600 }}>Reset all prices?</div>
-            <div style={{ fontSize:13, color:"#888", marginBottom:24 }}>Restores every service and price to the original defaults. Cannot be undone.</div>
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={() => setShowResetConfirm(false)} style={{ ...btn, flex:1, padding:11, background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:13 }}>Cancel</button>
-              <button onClick={handleReset} style={{ ...btn, flex:2, padding:11, background:"#c0392b", border:"none", borderRadius:8, color:"#fff", fontSize:13, fontWeight:700 }}>Yes, Reset All</button>
+        <div className="ov" onClick={()=>setShowResetConfirm(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#111", border:"1px solid rgba(192,57,43,0.4)", borderRadius:16, padding:32, width:"100%", maxWidth:360, margin:"0 16px"}}>
+            <div style={{fontSize:16, color:"#fff", marginBottom:10, fontWeight:600}}>Reset all prices?</div>
+            <div style={{fontSize:13, color:"#888", marginBottom:24}}>Restores every service and price to the original defaults. Cannot be undone.</div>
+            <div style={{display:"flex", gap:10}}>
+              <button onClick={()=>setShowResetConfirm(false)} style={{...b, flex:1, padding:11, background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:13}}>Cancel</button>
+              <button onClick={handleReset} style={{...b, flex:2, padding:11, background:"#c0392b", border:"none", borderRadius:8, color:"#fff", fontSize:13, fontWeight:700}}>Yes, Reset All</button>
             </div>
           </div>
         </div>
@@ -593,63 +546,62 @@ function App() {
 
       {/* ── SERVICES TAB ── */}
       {activeTab==="select" && (
-        <div style={{ maxWidth:780, margin:"0 auto", padding:"0 16px 90px" }}>
-          <div style={{ position:"sticky", top:HEADER_H, zIndex:90, background:"#000", paddingTop:13, paddingBottom:11 }}>
-            <div style={{ position:"relative" }}>
-              <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#555", fontSize:15 }}>🔍</span>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search services…" className="fi"
-                style={{ width:"100%", padding:"11px 40px 11px 42px", background:"#111", border:"1px solid #2a2a2a", borderRadius:10, color:"#fff", fontSize:14, fontFamily:"inherit" }} />
-              {search && <button onClick={() => setSearch("")} style={{ ...btn, position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#666", fontSize:20, padding:"0 4px" }}>×</button>}
+        <div style={{maxWidth:780, margin:"0 auto", padding:"0 16px 90px"}}>
+          <div style={{position:"sticky", top:H, zIndex:90, background:"#000", paddingTop:13, paddingBottom:11}}>
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#555", fontSize:15}}>🔍</span>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search services…" className="fi"
+                style={{width:"100%", padding:"11px 40px 11px 42px", background:"#111", border:"1px solid #2a2a2a", borderRadius:10, color:"#fff", fontSize:14, fontFamily:"inherit"}}/>
+              {search && <button onClick={()=>setSearch("")} style={{...b, position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#666", fontSize:20, padding:"0 4px"}}>×</button>}
             </div>
           </div>
 
-          {filteredServices && (
-            <div style={{ background:"#111", borderRadius:12, border:"1px solid #222", overflow:"hidden", marginBottom:10 }}>
-              <div style={{ padding:"9px 16px", borderBottom:"1px solid #222", fontSize:11, color:"#555", letterSpacing:2, textTransform:"uppercase" }}>{filteredServices.length} result{filteredServices.length!==1?"s":""}</div>
-              {filteredServices.length===0
-                ? <div style={{ padding:24, textAlign:"center", color:"#555" }}>No services found</div>
-                : filteredServices.map(({ cat, idx, service }) => {
+          {filteredSvcs && (
+            <div style={{background:"#111", borderRadius:12, border:"1px solid #222", overflow:"hidden", marginBottom:10}}>
+              <div style={{padding:"9px 16px", borderBottom:"1px solid #222", fontSize:11, color:"#555", letterSpacing:2, textTransform:"uppercase"}}>{filteredSvcs.length} result{filteredSvcs.length!==1?"s":""}</div>
+              {filteredSvcs.length===0 ? <div style={{padding:24, textAlign:"center", color:"#555"}}>No services found</div>
+                : filteredSvcs.map(({cat,idx,service}) => {
                   const key=`${cat}|||${idx}`, isSel=!!selected[key];
                   return (
-                    <div key={key} className="svc-row" onClick={() => toggleService(cat,idx)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", cursor:"pointer", background:isSel?"rgba(243,194,215,0.08)":"transparent", borderLeft:isSel?`3px solid ${PINK}`:"3px solid transparent" }}>
-                      <div><div style={{ fontSize:13, color:isSel?PINK:"#e0e0e0" }}>{service.name}</div><div style={{ fontSize:10, color:"#555", marginTop:2 }}>{cat}</div></div>
-                      <div style={{ textAlign:"right" }}><div style={{ fontSize:13, color:PINK, fontWeight:600 }}>{fmt(service.price)}</div>{isSel&&<div style={{ fontSize:10, color:"#5a8a5a" }}>✓ Added</div>}</div>
+                    <div key={key} className="sr" onClick={()=>toggleSvc(cat,idx)} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", cursor:"pointer", background:isSel?"rgba(243,194,215,0.08)":"transparent", borderLeft:isSel?`3px solid ${PINK}`:"3px solid transparent"}}>
+                      <div><div style={{fontSize:13, color:isSel?PINK:"#e0e0e0"}}>{service.name}</div><div style={{fontSize:10, color:"#555", marginTop:2}}>{cat}</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:13, color:PINK, fontWeight:600}}>{fmt(service.price)}</div>{isSel&&<div style={{fontSize:10, color:"#5a8a5a"}}>✓ Added</div>}</div>
                     </div>
                   );
                 })}
             </div>
           )}
 
-          {!filteredServices && Object.entries(services).map(([cat, items]) => {
+          {!filteredSvcs && Object.entries(services).map(([cat,items]) => {
             const isOpen=openCat===cat;
-            const catSel=items.filter((_,i) => selected[`${cat}|||${i}`]).length;
+            const catSel=items.filter((_,i)=>selected[`${cat}|||${i}`]).length;
             return (
-              <div key={cat} style={{ marginBottom:7, border:"1px solid #222", borderRadius:10, overflow:"hidden" }}>
-                <div className="cat-hdr" onClick={() => toggleCat(cat)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 16px", cursor:"pointer", background:isOpen?"rgba(243,194,215,0.06)":"#111" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <span style={{ fontSize:13, color:catSel>0?PINK:"#ccc" }}>{cat}</span>
-                    {catSel>0 && <span style={{ background:PINK, color:"#000", borderRadius:10, padding:"1px 8px", fontSize:10, fontWeight:700 }}>{catSel}</span>}
+              <div key={cat} style={{marginBottom:7, border:"1px solid #222", borderRadius:10, overflow:"hidden"}}>
+                <div className="ch" onClick={()=>toggleCat(cat)} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 16px", cursor:"pointer", background:isOpen?"rgba(243,194,215,0.06)":"#111"}}>
+                  <div style={{display:"flex", alignItems:"center", gap:10}}>
+                    <span style={{fontSize:13, color:catSel>0?PINK:"#ccc"}}>{cat}</span>
+                    {catSel>0 && <span style={{background:PINK, color:"#000", borderRadius:10, padding:"1px 8px", fontSize:10, fontWeight:700}}>{catSel}</span>}
                   </div>
-                  <span style={{ color:"#555", fontSize:17, transform:isOpen?"rotate(180deg)":"none", transition:"transform 0.2s" }}>⌄</span>
+                  <span style={{color:"#555", fontSize:17, transform:isOpen?"rotate(180deg)":"none", transition:"transform 0.2s"}}>⌄</span>
                 </div>
                 {isOpen && (
-                  <div style={{ borderTop:"1px solid #222" }}>
-                    {items.map((svc, idx) => {
+                  <div style={{borderTop:"1px solid #222"}}>
+                    {items.map((svc,idx) => {
                       const key=`${cat}|||${idx}`, isSel=!!selected[key];
                       return (
-                        <div key={idx} className="svc-row" onClick={() => toggleService(cat,idx)} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 16px", cursor:"pointer", background:isSel?"rgba(243,194,215,0.07)":"transparent", borderLeft:isSel?`3px solid ${PINK}`:"3px solid transparent" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                            <div style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${isSel?PINK:"#333"}`, background:isSel?PINK:"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                              {isSel && <span style={{ color:"#000", fontSize:10, fontWeight:700, lineHeight:1 }}>✓</span>}
+                        <div key={idx} className="sr" onClick={()=>toggleSvc(cat,idx)} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"11px 16px", cursor:"pointer", background:isSel?"rgba(243,194,215,0.07)":"transparent", borderLeft:isSel?`3px solid ${PINK}`:"3px solid transparent"}}>
+                          <div style={{display:"flex", alignItems:"center", gap:10}}>
+                            <div style={{width:16, height:16, borderRadius:4, border:`1.5px solid ${isSel?PINK:"#333"}`, background:isSel?PINK:"transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0}}>
+                              {isSel && <span style={{color:"#000", fontSize:10, fontWeight:700, lineHeight:1}}>✓</span>}
                             </div>
                             <div>
-                              <span style={{ fontSize:13, color:isSel?"#fff":"#888" }}>{svc.name}</span>
-                              {svc.autoDiscount && <div style={{ fontSize:10, color:"#7a9e7a", marginTop:1 }}>₦5,000 discount with other services</div>}
+                              <span style={{fontSize:13, color:isSel?"#fff":"#888"}}>{svc.name}</span>
+                              {svc.autoDiscount && <div style={{fontSize:10, color:"#7a9e7a", marginTop:1}}>₦5,000 discount with other services</div>}
                             </div>
                           </div>
-                          <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
-                            <div style={{ fontSize:13, color:PINK }}>{fmt(svc.price)}</div>
-                            <div style={{ fontSize:10, color:"#777" }}>{fmt(Math.round(svc.price*(1+VAT_RATE)))} +VAT</div>
+                          <div style={{textAlign:"right", flexShrink:0, marginLeft:12}}>
+                            <div style={{fontSize:13, color:PINK}}>{fmt(svc.price)}</div>
+                            <div style={{fontSize:10, color:"#777"}}>{fmt(Math.round(svc.price*(1+VAT_RATE)))} +VAT</div>
                           </div>
                         </div>
                       );
@@ -664,128 +616,128 @@ function App() {
 
       {/* ── CHECKOUT TAB ── */}
       {activeTab==="checkout" && (
-        <div style={{ maxWidth:600, margin:"0 auto", padding:"20px 16px 60px" }}>
-          {selectedItems.length===0 ? (
-            <div style={{ textAlign:"center", padding:"60px 0" }}>
-              <div style={{ fontSize:48, marginBottom:16 }}>🛒</div>
-              <div style={{ fontSize:16, color:"#555" }}>No services selected yet</div>
-              <button onClick={() => setActiveTab("select")} style={{ ...btn, marginTop:20, padding:"10px 24px", background:PINK, border:"none", borderRadius:20, color:"#000", fontSize:13, fontWeight:600 }}>Browse Services</button>
+        <div style={{maxWidth:600, margin:"0 auto", padding:"20px 16px 60px"}}>
+          {selItems.length===0 ? (
+            <div style={{textAlign:"center", padding:"60px 0"}}>
+              <div style={{fontSize:48, marginBottom:16}}>🛒</div>
+              <div style={{fontSize:16, color:"#555"}}>No services selected yet</div>
+              <button onClick={()=>setActiveTab("select")} style={{...b, marginTop:20, padding:"10px 24px", background:PINK, border:"none", borderRadius:20, color:"#000", fontSize:13, fontWeight:600}}>Browse Services</button>
             </div>
           ) : (
             <>
-              <div style={{ background:"#111", borderRadius:12, border:"1px solid #222", overflow:"hidden", marginBottom:14 }}>
-                <div style={{ padding:"12px 16px", borderBottom:"1px solid #222", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:11, color:"#555", letterSpacing:2, textTransform:"uppercase" }}>Selected Services</span>
-                  <button onClick={clearAll} style={{ ...btn, fontSize:11, color:"#c55", background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.2)", borderRadius:6, padding:"4px 10px" }}>Clear All</button>
+              <div style={{background:"#111", borderRadius:12, border:"1px solid #222", overflow:"hidden", marginBottom:14}}>
+                <div style={{padding:"12px 16px", borderBottom:"1px solid #222", display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                  <span style={{fontSize:11, color:"#555", letterSpacing:2, textTransform:"uppercase"}}>Selected Services</span>
+                  <button onClick={clearAll} style={{...b, fontSize:11, color:"#c55", background:"rgba(255,80,80,0.08)", border:"1px solid rgba(255,80,80,0.2)", borderRadius:6, padding:"4px 10px"}}>Clear All</button>
                 </div>
-                {selectedItems.map(({ key, service, qty }) => (
-                  <div key={key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, color:"#e0e0e0" }}>{service.name}</div>
-                      <div style={{ fontSize:11, color:"#555", marginTop:2 }}>{fmt(service.price)} each</div>
+                {selItems.map(({key,service,qty}) => (
+                  <div key={key} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13, color:"#e0e0e0"}}>{service.name}</div>
+                      <div style={{fontSize:11, color:"#555", marginTop:2}}>{fmt(service.price)} each</div>
                     </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginLeft:12 }}>
-                      <button onClick={() => updateQty(key,-1)} style={{ ...btn, width:26, height:26, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#888", fontSize:17 }}>−</button>
-                      <span style={{ fontSize:13, minWidth:20, textAlign:"center", color:PINK, fontWeight:600 }}>{qty}</span>
-                      <button onClick={() => updateQty(key,1)} style={{ ...btn, width:26, height:26, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#888", fontSize:17 }}>+</button>
+                    <div style={{display:"flex", alignItems:"center", gap:8, marginLeft:12}}>
+                      <button onClick={()=>updateQty(key,-1)} style={{...b, width:26, height:26, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#888", fontSize:17}}>−</button>
+                      <span style={{fontSize:13, minWidth:20, textAlign:"center", color:PINK, fontWeight:600}}>{qty}</span>
+                      <button onClick={()=>updateQty(key,1)} style={{...b, width:26, height:26, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#888", fontSize:17}}>+</button>
                     </div>
-                    <div style={{ textAlign:"right", minWidth:100, marginLeft:12 }}>
-                      <div style={{ fontSize:13, color:PINK, fontWeight:600 }}>{fmt(service.price*qty)}</div>
+                    <div style={{textAlign:"right", minWidth:100, marginLeft:12}}>
+                      <div style={{fontSize:13, color:PINK, fontWeight:600}}>{fmt(service.price*qty)}</div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {hasConsultWithAutoDiscount&&!hasNonConsult && (
-                <div style={{ background:"rgba(243,194,215,0.06)", border:`1px solid rgba(243,194,215,0.2)`, borderRadius:8, padding:"11px 14px", marginBottom:14, fontSize:12, color:PINK }}>
-                  ℹ️ The ₦5,000 consultation discount applies only when other services are booked on the same day.
+              {hasAutoDiscount&&!hasNonConsult && (
+                <div style={{background:"rgba(243,194,215,0.06)", border:`1px solid rgba(243,194,215,0.2)`, borderRadius:8, padding:"11px 14px", marginBottom:14, fontSize:12, color:PINK}}>
+                  ℹ️ The ₦5,000 discount applies only when other services are booked on the same day.
                 </div>
               )}
-              {suppressConsultDiscount&&hasNonConsult&&hasConsultWithAutoDiscount && (
-                <div style={{ background:"rgba(243,194,215,0.04)", border:`1px solid rgba(243,194,215,0.15)`, borderRadius:8, padding:"10px 14px", marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:12, color:"#666" }}>Consultation discount removed</span>
-                  <button onClick={() => setSuppressConsultDiscount(false)} style={{ ...btn, fontSize:11, color:PINK, background:"transparent", border:`1px solid rgba(243,194,215,0.3)`, borderRadius:6, padding:"3px 10px" }}>Restore</button>
+              {suppressConsult&&hasNonConsult&&hasAutoDiscount && (
+                <div style={{background:"rgba(243,194,215,0.04)", border:`1px solid rgba(243,194,215,0.15)`, borderRadius:8, padding:"10px 14px", marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                  <span style={{fontSize:12, color:"#666"}}>Consultation discount removed</span>
+                  <button onClick={()=>setSuppressConsult(false)} style={{...b, fontSize:11, color:PINK, background:"transparent", border:`1px solid rgba(243,194,215,0.3)`, borderRadius:6, padding:"3px 10px"}}>Restore</button>
                 </div>
               )}
 
-              <div style={{ background:"#0d0d0d", borderRadius:12, border:`1px solid rgba(243,194,215,0.25)`, padding:20 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-                  <span style={{ color:"#888", fontSize:14 }}>Subtotal (excl. VAT)</span>
-                  <span style={{ color:"#ccc", fontSize:14 }}>{fmt(subtotal)}</span>
+              <div style={{background:"#0d0d0d", borderRadius:12, border:`1px solid rgba(243,194,215,0.25)`, padding:20}}>
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:10}}>
+                  <span style={{color:"#888", fontSize:14}}>Subtotal (excl. VAT)</span>
+                  <span style={{color:"#ccc", fontSize:14}}>{fmt(subtotal)}</span>
                 </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16, paddingBottom:16, borderBottom:"1px solid #222" }}>
-                  <span style={{ color:"#888", fontSize:14 }}>VAT (7.5%)</span>
-                  <span style={{ color:"#ccc", fontSize:14 }}>{fmt(vat)}</span>
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:16, paddingBottom:16, borderBottom:"1px solid #222"}}>
+                  <span style={{color:"#888", fontSize:14}}>VAT (7.5%)</span>
+                  <span style={{color:"#ccc", fontSize:14}}>{fmt(vat)}</span>
                 </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
-                  <span style={{ color:"#aaa", fontSize:14 }}>Total (after VAT)</span>
-                  <span style={{ color:"#fff", fontSize:14, fontWeight:600 }}>{fmt(totalAfterVat)}</span>
+                <div style={{display:"flex", justifyContent:"space-between", marginBottom:16}}>
+                  <span style={{color:"#aaa", fontSize:14}}>Total (after VAT)</span>
+                  <span style={{color:"#fff", fontSize:14, fontWeight:600}}>{fmt(totalVat)}</span>
                 </div>
 
-                {(consultDiscount>0||manualDiscount>0) && (
-                  <div style={{ background:"rgba(90,138,90,0.1)", border:"1px solid rgba(90,138,90,0.25)", borderRadius:8, padding:"12px 14px", marginBottom:16 }}>
-                    <div style={{ fontSize:10, color:"#7a9e7a", letterSpacing:2, textTransform:"uppercase", marginBottom:8 }}>Discounts Applied</div>
-                    {consultDiscount>0 && (
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                        <span style={{ fontSize:13, color:"#8aba8a" }}>🏷 In-person consultation discount</span>
-                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                          <span style={{ fontSize:13, color:"#8aba8a", fontWeight:600 }}>− {fmt(consultDiscount)}</span>
-                          <button onClick={() => setSuppressConsultDiscount(true)} style={{ ...btn, width:20, height:20, borderRadius:"50%", border:"1px solid rgba(90,138,90,0.4)", background:"transparent", color:"#7a9e7a", fontSize:13 }}>×</button>
+                {(consultDisc>0||manualDisc>0) && (
+                  <div style={{background:"rgba(90,138,90,0.1)", border:"1px solid rgba(90,138,90,0.25)", borderRadius:8, padding:"12px 14px", marginBottom:16}}>
+                    <div style={{fontSize:10, color:"#7a9e7a", letterSpacing:2, textTransform:"uppercase", marginBottom:8}}>Discounts Applied</div>
+                    {consultDisc>0 && (
+                      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
+                        <span style={{fontSize:13, color:"#8aba8a"}}>🏷 In-person consultation discount</span>
+                        <div style={{display:"flex", alignItems:"center", gap:8}}>
+                          <span style={{fontSize:13, color:"#8aba8a", fontWeight:600}}>− {fmt(consultDisc)}</span>
+                          <button onClick={()=>setSuppressConsult(true)} style={{...b, width:20, height:20, borderRadius:"50%", border:"1px solid rgba(90,138,90,0.4)", background:"transparent", color:"#7a9e7a", fontSize:13}}>×</button>
                         </div>
                       </div>
                     )}
-                    {discounts.filter(d => (parseFloat(d.value.replace(/[^0-9.]/g,""))||0)>0).map(d => {
+                    {discounts.filter(d=>(parseFloat(d.value.replace(/[^0-9.]/g,""))||0)>0).map(d => {
                       const raw=parseFloat(d.value.replace(/[^0-9.]/g,""))||0;
-                      const val=d.type==="percent"?Math.round((raw/100)*totalAfterVat):raw;
+                      const val=d.type==="percent"?Math.round((raw/100)*totalVat):raw;
                       return (
-                        <div key={d.id} style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                          <span style={{ fontSize:13, color:"#8aba8a" }}>🏷 Manual discount{d.type==="percent"?` (${raw}%)`:""}</span>
-                          <span style={{ fontSize:13, color:"#8aba8a", fontWeight:600 }}>− {fmt(val)}</span>
+                        <div key={d.id} style={{display:"flex", justifyContent:"space-between", marginBottom:4}}>
+                          <span style={{fontSize:13, color:"#8aba8a"}}>🏷 Manual discount{d.type==="percent"?` (${raw}%)`:""}</span>
+                          <span style={{fontSize:13, color:"#8aba8a", fontWeight:600}}>− {fmt(val)}</span>
                         </div>
                       );
                     })}
                   </div>
                 )}
 
-                <div style={{ marginBottom:20 }}>
-                  <div style={{ fontSize:11, color:"#555", letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>Manual Discounts</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11, color:"#555", letterSpacing:1, textTransform:"uppercase", marginBottom:10}}>Manual Discounts</div>
+                  <div style={{display:"flex", flexDirection:"column", gap:10}}>
                     {discounts.map(d => {
                       const raw=parseFloat(d.value.replace(/[^0-9.]/g,""))||0;
-                      const equiv=d.type==="percent"?Math.round((raw/100)*totalAfterVat):0;
+                      const equiv=d.type==="percent"?Math.round((raw/100)*totalVat):0;
                       return (
                         <div key={d.id}>
-                          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                            <div style={{ display:"flex", background:"#1a1a1a", borderRadius:20, padding:3, border:"1px solid #2a2a2a", flexShrink:0 }}>
+                          <div style={{display:"flex", gap:8, alignItems:"center"}}>
+                            <div style={{display:"flex", background:"#1a1a1a", borderRadius:20, padding:3, border:"1px solid #2a2a2a", flexShrink:0}}>
                               {[{val:"naira",label:"₦"},{val:"percent",label:"%"}].map(({val,label}) => (
-                                <button key={val} onClick={() => updateDiscount(d.id,"type",val)} style={{ ...btn, padding:"3px 11px", borderRadius:16, border:"none", fontSize:12, fontWeight:600, background:d.type===val?PINK:"transparent", color:d.type===val?"#000":"#666" }}>{label}</button>
+                                <button key={val} onClick={()=>updateDiscount(d.id,"type",val)} style={{...b, padding:"3px 11px", borderRadius:16, border:"none", fontSize:12, fontWeight:600, background:d.type===val?PINK:"transparent", color:d.type===val?"#000":"#666"}}>{label}</button>
                               ))}
                             </div>
-                            <div style={{ position:"relative", flex:1 }}>
-                              <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", color:PINK, fontSize:13 }}>{d.type==="naira"?"₦":"%"}</span>
-                              <input className="fi" type="number" min="0" value={d.value} onChange={e => updateDiscount(d.id,"value",e.target.value)} placeholder={d.type==="naira"?"Amount…":"Percentage…"}
-                                style={{ width:"100%", padding:"10px 12px 10px 26px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit" }} />
+                            <div style={{position:"relative", flex:1}}>
+                              <span style={{position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", color:PINK, fontSize:13}}>{d.type==="naira"?"₦":"%"}</span>
+                              <input className="fi" type="number" min="0" value={d.value} onChange={e=>updateDiscount(d.id,"value",e.target.value)} placeholder={d.type==="naira"?"Amount…":"Percentage…"}
+                                style={{width:"100%", padding:"10px 12px 10px 26px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit"}}/>
                             </div>
-                            {discounts.length>1 && <button onClick={() => removeDiscount(d.id)} style={{ ...btn, width:30, height:30, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#666", fontSize:18, flexShrink:0 }}>×</button>}
+                            {discounts.length>1 && <button onClick={()=>removeDiscount(d.id)} style={{...b, width:30, height:30, borderRadius:"50%", border:"1px solid #333", background:"none", color:"#666", fontSize:18, flexShrink:0}}>×</button>}
                           </div>
-                          {d.type==="percent"&&raw>0 && <div style={{ fontSize:11, color:"#666", marginTop:4, paddingLeft:4 }}>= {fmt(equiv)} off total</div>}
+                          {d.type==="percent"&&raw>0 && <div style={{fontSize:11, color:"#666", marginTop:4, paddingLeft:4}}>= {fmt(equiv)} off total</div>}
                         </div>
                       );
                     })}
                   </div>
-                  <button onClick={addDiscount} style={{ marginTop:10, width:"100%", padding:9, background:"transparent", border:`1px dashed rgba(243,194,215,0.3)`, borderRadius:8, color:PINK, fontFamily:"inherit", fontSize:12, cursor:"pointer" }}
+                  <button onClick={addDiscount} style={{marginTop:10, width:"100%", padding:9, background:"transparent", border:`1px dashed rgba(243,194,215,0.3)`, borderRadius:8, color:PINK, fontFamily:"inherit", fontSize:12, cursor:"pointer"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=PINK;e.currentTarget.style.background="rgba(243,194,215,0.05)"}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(243,194,215,0.3)";e.currentTarget.style.background="transparent"}}>
                     + Add Additional Discount
                   </button>
                 </div>
 
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:16, borderTop:`1px solid rgba(243,194,215,0.2)` }}>
+                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:16, borderTop:`1px solid rgba(243,194,215,0.2)`}}>
                   <div>
-                    <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:18, color:PINK }}>Amount Due</div>
-                    {totalDiscount>0 && <div style={{ fontSize:11, color:"#7a9e7a", marginTop:2 }}>Saved {fmt(totalDiscount)}</div>}
+                    <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:18, color:PINK}}>Amount Due</div>
+                    {totalDisc>0 && <div style={{fontSize:11, color:"#7a9e7a", marginTop:2}}>Saved {fmt(totalDisc)}</div>}
                   </div>
-                  <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:26, color:PINK, fontWeight:700 }}>{fmt(finalTotal)}</div>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif", fontSize:26, color:PINK, fontWeight:700}}>{fmt(finalTotal)}</div>
                 </div>
               </div>
             </>
@@ -795,91 +747,92 @@ function App() {
 
       {/* ── ADMIN TAB ── */}
       {activeTab==="admin"&&isAdmin&&editData && (
-        <div style={{ maxWidth:780, margin:"0 auto", padding:"0 16px 90px" }}>
-          <div style={{ position:"sticky", top:HEADER_H, zIndex:90, background:"#000", paddingTop:13, paddingBottom:11 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:11, gap:10, flexWrap:"wrap" }}>
+        <div style={{maxWidth:780, margin:"0 auto", padding:"0 16px 90px"}}>
+          <div style={{position:"sticky", top:H, zIndex:90, background:"#000", paddingTop:13, paddingBottom:11}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:11, gap:10, flexWrap:"wrap"}}>
               <div>
-                <div style={{ fontSize:13, color:"#fff", fontWeight:600 }}>Edit Services</div>
-                <div style={{ fontSize:10, color:"#555", marginTop:2 }}>Reorder · Add · Delete · Update prices</div>
+                <div style={{fontSize:13, color:"#fff", fontWeight:600}}>Edit Services</div>
+                <div style={{fontSize:10, color:"#555", marginTop:2}}>Reorder · Add · Delete · Update prices</div>
               </div>
-              <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
-                {saveStatus==="saved"&&<span style={{ fontSize:12, color:"#7a9e7a" }}>✓ Saved</span>}
-                <button onClick={sortAlpha} style={{ ...btn, padding:"8px 13px", background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:11 }}>Sort A–Z</button>
-                <button onClick={() => setShowResetConfirm(true)} style={{ ...btn, padding:"8px 13px", background:"rgba(192,57,43,0.1)", border:"1px solid rgba(192,57,43,0.3)", borderRadius:8, color:"#e07070", fontSize:11 }}>Reset</button>
-                <button onClick={handleSave} style={{ ...btn, padding:"8px 18px", background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:12, fontWeight:700 }}>Save All</button>
+              <div style={{display:"flex", gap:7, alignItems:"center", flexWrap:"wrap"}}>
+                {saveStatus==="saved"&&<span style={{fontSize:12, color:"#7a9e7a"}}>✓ Saved</span>}
+                {saveStatus==="error"&&<span style={{fontSize:12, color:"#c0392b"}}>✗ Failed</span>}
+                <button onClick={sortAlpha} style={{...b, padding:"8px 13px", background:"transparent", border:"1px solid #333", borderRadius:8, color:"#888", fontSize:11}}>Sort A–Z</button>
+                <button onClick={()=>setShowResetConfirm(true)} style={{...b, padding:"8px 13px", background:"rgba(192,57,43,0.1)", border:"1px solid rgba(192,57,43,0.3)", borderRadius:8, color:"#e07070", fontSize:11}}>Reset</button>
+                <button onClick={handleSave} style={{...b, padding:"8px 18px", background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:12, fontWeight:700}}>Save All</button>
               </div>
             </div>
-            <div style={{ position:"relative" }}>
-              <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#555", fontSize:15 }}>🔍</span>
-              <input value={adminSearch} onChange={e => setAdminSearch(e.target.value)} placeholder="Search services to edit…" className="fi"
-                style={{ width:"100%", padding:"11px 40px 11px 42px", background:"#111", border:"1px solid #2a2a2a", borderRadius:10, color:"#fff", fontSize:14, fontFamily:"inherit" }} />
-              {adminSearch && <button onClick={() => setAdminSearch("")} style={{ ...btn, position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#666", fontSize:20, padding:"0 4px" }}>×</button>}
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#555", fontSize:15}}>🔍</span>
+              <input value={adminSearch} onChange={e=>setAdminSearch(e.target.value)} placeholder="Search services to edit…" className="fi"
+                style={{width:"100%", padding:"11px 40px 11px 42px", background:"#111", border:"1px solid #2a2a2a", borderRadius:10, color:"#fff", fontSize:14, fontFamily:"inherit"}}/>
+              {adminSearch && <button onClick={()=>setAdminSearch("")} style={{...b, position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"#666", fontSize:20, padding:"0 4px"}}>×</button>}
             </div>
           </div>
 
-          {editData.catOrder.map((cat, catIdx) => {
+          {editData.catOrder.map((cat,catIdx) => {
             const items=editData.prices[cat]||[];
             const searching=adminSearch.trim()!=="";
             const filtered=searching?items.map((s,i)=>({s,i})).filter(({s})=>s.name.toLowerCase().includes(adminSearch.toLowerCase())):items.map((s,i)=>({s,i}));
             if (searching&&filtered.length===0) return null;
             const isOpen=searching||editOpenCat===cat;
-            const isAddingHere=addForm?.cat===cat;
+            const isAdding=addForm?.cat===cat;
             return (
-              <div key={cat} style={{ marginBottom:7, border:"1px solid #222", borderRadius:10, overflow:"hidden" }}>
-                <div style={{ display:"flex", alignItems:"stretch", background:isOpen?"rgba(243,194,215,0.06)":"#111" }}>
+              <div key={cat} style={{marginBottom:7, border:"1px solid #222", borderRadius:10, overflow:"hidden"}}>
+                <div style={{display:"flex", alignItems:"stretch", background:isOpen?"rgba(243,194,215,0.06)":"#111"}}>
                   {!searching && (
-                    <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", padding:"0 6px 0 8px", gap:3, borderRight:"1px solid #1a1a1a" }}>
-                      <button className="move-btn" onClick={() => moveCat(catIdx,-1)} disabled={catIdx===0}
-                        style={{ ...btn, width:22, height:18, border:"1px solid #2a2a2a", background:"transparent", color:catIdx===0?"#222":"#666", cursor:catIdx===0?"default":"pointer", borderRadius:4, fontSize:9 }}>▲</button>
-                      <button className="move-btn" onClick={() => moveCat(catIdx,1)} disabled={catIdx===editData.catOrder.length-1}
-                        style={{ ...btn, width:22, height:18, border:"1px solid #2a2a2a", background:"transparent", color:catIdx===editData.catOrder.length-1?"#222":"#666", cursor:catIdx===editData.catOrder.length-1?"default":"pointer", borderRadius:4, fontSize:9 }}>▼</button>
+                    <div style={{display:"flex", flexDirection:"column", justifyContent:"center", padding:"0 6px 0 8px", gap:3, borderRight:"1px solid #1a1a1a"}}>
+                      <button className="mb" onClick={()=>moveCat(catIdx,-1)} disabled={catIdx===0}
+                        style={{...b, width:22, height:18, border:"1px solid #2a2a2a", background:"transparent", color:catIdx===0?"#222":"#666", cursor:catIdx===0?"default":"pointer", borderRadius:4, fontSize:9}}>▲</button>
+                      <button className="mb" onClick={()=>moveCat(catIdx,1)} disabled={catIdx===editData.catOrder.length-1}
+                        style={{...b, width:22, height:18, border:"1px solid #2a2a2a", background:"transparent", color:catIdx===editData.catOrder.length-1?"#222":"#666", cursor:catIdx===editData.catOrder.length-1?"default":"pointer", borderRadius:4, fontSize:9}}>▼</button>
                     </div>
                   )}
-                  <div onClick={() => !searching&&setEditOpenCat(p => p===cat?null:cat)} className={searching?"":"cat-hdr"}
-                    style={{ flex:1, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 16px", cursor:searching?"default":"pointer" }}>
-                    <span style={{ fontSize:13, color:"#ccc" }}>{cat}</span>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <span style={{ fontSize:11, color:"#555" }}>{items.length} item{items.length!==1?"s":""}</span>
-                      {!searching && <span style={{ color:"#555", fontSize:17, transform:isOpen?"rotate(180deg)":"none", transition:"transform 0.2s" }}>⌄</span>}
+                  <div onClick={()=>!searching&&setEditOpenCat(p=>p===cat?null:cat)} className={searching?"":"ch"}
+                    style={{flex:1, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 16px", cursor:searching?"default":"pointer"}}>
+                    <span style={{fontSize:13, color:"#ccc"}}>{cat}</span>
+                    <div style={{display:"flex", alignItems:"center", gap:10}}>
+                      <span style={{fontSize:11, color:"#555"}}>{items.length} item{items.length!==1?"s":""}</span>
+                      {!searching&&<span style={{color:"#555", fontSize:17, transform:isOpen?"rotate(180deg)":"none", transition:"transform 0.2s"}}>⌄</span>}
                     </div>
                   </div>
                 </div>
                 {isOpen && (
-                  <div style={{ borderTop:"1px solid #222" }}>
-                    {filtered.length===0&&!isAddingHere && <div style={{ padding:16, textAlign:"center", fontSize:12, color:"#444" }}>No services yet — add one below</div>}
-                    {filtered.map(({ s:svc, i:idx }) => (
-                      <div key={`${cat}-${idx}`} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:"1px solid #181818" }}>
-                        <div style={{ flex:1, marginRight:12 }}>
-                          <div style={{ fontSize:13, color:"#ccc" }}>{svc.name}</div>
-                          {svc.autoDiscount && <div style={{ fontSize:10, color:"#7a9e7a", marginTop:1 }}>Includes ₦5,000 auto-discount</div>}
+                  <div style={{borderTop:"1px solid #222"}}>
+                    {filtered.length===0&&!isAdding&&<div style={{padding:16, textAlign:"center", fontSize:12, color:"#444"}}>No services yet — add one below</div>}
+                    {filtered.map(({s:svc,i:idx}) => (
+                      <div key={`${cat}-${idx}`} style={{display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 16px", borderBottom:"1px solid #181818"}}>
+                        <div style={{flex:1, marginRight:12}}>
+                          <div style={{fontSize:13, color:"#ccc"}}>{svc.name}</div>
+                          {svc.autoDiscount&&<div style={{fontSize:10, color:"#7a9e7a", marginTop:1}}>Includes ₦5,000 auto-discount</div>}
                         </div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-                          <span style={{ color:PINK, fontSize:13 }}>₦</span>
-                          <input className="fi" type="number" min="0" value={svc.price} onChange={e => setPrice(cat,idx,e.target.value)}
-                            style={{ width:120, padding:"8px 10px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit", textAlign:"right" }} />
-                          <button className="del-btn" onClick={() => deleteService(cat,idx)}
-                            style={{ ...btn, width:30, height:30, borderRadius:6, border:"1px solid #2a2a2a", background:"transparent", color:"#555", fontSize:14 }}>🗑</button>
+                        <div style={{display:"flex", alignItems:"center", gap:8, flexShrink:0}}>
+                          <span style={{color:PINK, fontSize:13}}>₦</span>
+                          <input className="fi" type="number" min="0" value={svc.price} onChange={e=>setPrice(cat,idx,e.target.value)}
+                            style={{width:120, padding:"8px 10px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit", textAlign:"right"}}/>
+                          <button className="db" onClick={()=>deleteSvc(cat,idx)}
+                            style={{...b, width:30, height:30, borderRadius:6, border:"1px solid #2a2a2a", background:"transparent", color:"#555", fontSize:14}}>🗑</button>
                         </div>
                       </div>
                     ))}
-                    {!searching && (isAddingHere ? (
-                      <div style={{ padding:"14px 16px", borderTop:"1px solid #1a1a1a", background:"rgba(243,194,215,0.03)" }}>
-                        <div style={{ fontSize:11, color:PINK, letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>New Service</div>
-                        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                          <input autoFocus className="fi" placeholder="Service name" value={addForm.name} onChange={e => setAddForm(p=>({...p,name:e.target.value}))}
-                            style={{ flex:2, minWidth:140, padding:"9px 12px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit" }} />
-                          <div style={{ position:"relative", flex:1, minWidth:110 }}>
-                            <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:PINK, fontSize:12 }}>₦</span>
-                            <input className="fi" type="number" min="0" placeholder="Price" value={addForm.price} onChange={e => setAddForm(p=>({...p,price:e.target.value}))} onKeyDown={e => e.key==="Enter"&&addService(cat)}
-                              style={{ width:"100%", padding:"9px 10px 9px 24px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit" }} />
+                    {!searching && (isAdding ? (
+                      <div style={{padding:"14px 16px", borderTop:"1px solid #1a1a1a", background:"rgba(243,194,215,0.03)"}}>
+                        <div style={{fontSize:11, color:PINK, letterSpacing:1, textTransform:"uppercase", marginBottom:10}}>New Service</div>
+                        <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+                          <input autoFocus className="fi" placeholder="Service name" value={addForm.name} onChange={e=>setAddForm(p=>({...p,name:e.target.value}))}
+                            style={{flex:2, minWidth:140, padding:"9px 12px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit"}}/>
+                          <div style={{position:"relative", flex:1, minWidth:110}}>
+                            <span style={{position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:PINK, fontSize:12}}>₦</span>
+                            <input className="fi" type="number" min="0" placeholder="Price" value={addForm.price} onChange={e=>setAddForm(p=>({...p,price:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addSvc(cat)}
+                              style={{width:"100%", padding:"9px 10px 9px 24px", background:"#000", border:"1px solid #2a2a2a", borderRadius:8, color:"#fff", fontSize:13, fontFamily:"inherit"}}/>
                           </div>
-                          <button onClick={() => addService(cat)} style={{ ...btn, padding:"9px 18px", background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:12, fontWeight:700, flexShrink:0 }}>Add</button>
-                          <button onClick={() => setAddForm(null)} style={{ ...btn, padding:"9px 13px", background:"transparent", border:"1px solid #333", borderRadius:8, color:"#666", fontSize:12, flexShrink:0 }}>Cancel</button>
+                          <button onClick={()=>addSvc(cat)} style={{...b, padding:"9px 18px", background:PINK, border:"none", borderRadius:8, color:"#000", fontSize:12, fontWeight:700, flexShrink:0}}>Add</button>
+                          <button onClick={()=>setAddForm(null)} style={{...b, padding:"9px 13px", background:"transparent", border:"1px solid #333", borderRadius:8, color:"#666", fontSize:12, flexShrink:0}}>Cancel</button>
                         </div>
                       </div>
                     ) : (
-                      <button onClick={() => { setAddForm({cat,name:"",price:""}); setEditOpenCat(cat); }}
-                        style={{ ...btn, width:"100%", padding:11, background:"transparent", border:"none", borderTop:"1px solid #1a1a1a", color:PINK, fontFamily:"inherit", fontSize:12, cursor:"pointer" }}
+                      <button onClick={()=>{setAddForm({cat,name:"",price:""});setEditOpenCat(cat);}}
+                        style={{...b, width:"100%", padding:11, background:"transparent", border:"none", borderTop:"1px solid #1a1a1a", color:PINK, fontFamily:"inherit", fontSize:12, cursor:"pointer"}}
                         onMouseEnter={e=>e.currentTarget.style.background="rgba(243,194,215,0.04)"}
                         onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                         + Add Service to {cat}
@@ -891,39 +844,40 @@ function App() {
             );
           })}
 
-          <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"#000", borderTop:"1px solid rgba(192,57,43,0.25)", padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", zIndex:100 }}>
-            <div style={{ fontSize:11, color:"#555" }}>{editData.catOrder.length} categories · {editData.catOrder.reduce((s,c)=>s+(editData.prices[c]?.length||0),0)} services</div>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              {saveStatus==="saved"&&<span style={{ fontSize:12, color:"#7a9e7a" }}>✓ Saved</span>}
-              <button onClick={handleSave} style={{ ...btn, padding:"9px 22px", background:PINK, border:"none", borderRadius:20, color:"#000", fontSize:12, fontWeight:700 }}>Save All Changes</button>
+          <div style={{position:"fixed", bottom:0, left:0, right:0, background:"#000", borderTop:"1px solid rgba(192,57,43,0.25)", padding:"12px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", zIndex:100}}>
+            <div style={{fontSize:11, color:"#555"}}>{editData.catOrder.length} categories · {editData.catOrder.reduce((s,c)=>s+(editData.prices[c]?.length||0),0)} services</div>
+            <div style={{display:"flex", gap:10, alignItems:"center"}}>
+              {saveStatus==="saved"&&<span style={{fontSize:12, color:"#7a9e7a"}}>✓ Saved</span>}
+              {saveStatus==="error"&&<span style={{fontSize:12, color:"#c0392b"}}>✗ Failed</span>}
+              <button onClick={handleSave} style={{...b, padding:"9px 22px", background:PINK, border:"none", borderRadius:20, color:"#000", fontSize:12, fontWeight:700}}>Save All Changes</button>
             </div>
           </div>
         </div>
       )}
 
       {/* STICKY BILL BAR */}
-      {selectedItems.length>0&&activeTab==="select" && (
-        <div onClick={() => setActiveTab("checkout")} style={{ position:"fixed", bottom:0, left:0, right:0, background:"#000", borderTop:`1px solid rgba(243,194,215,0.3)`, padding:"13px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", zIndex:100 }}>
+      {selItems.length>0&&activeTab==="select" && (
+        <div onClick={()=>setActiveTab("checkout")} style={{position:"fixed", bottom:0, left:0, right:0, background:"#000", borderTop:`1px solid rgba(243,194,215,0.3)`, padding:"13px 20px", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer", zIndex:100}}>
           <div>
-            <div style={{ fontSize:11, color:"#555", letterSpacing:1 }}>{selectedItems.length} service{selectedItems.length!==1?"s":""} selected</div>
-            <div style={{ fontSize:13, color:PINK, marginTop:2 }}>
-              {fmt(subtotal)} + VAT = <strong>{fmt(totalAfterVat)}</strong>
-              {totalDiscount>0&&<span style={{ color:"#7a9e7a", marginLeft:6 }}>→ {fmt(finalTotal)} after discounts</span>}
+            <div style={{fontSize:11, color:"#555", letterSpacing:1}}>{selItems.length} service{selItems.length!==1?"s":""} selected</div>
+            <div style={{fontSize:13, color:PINK, marginTop:2}}>
+              {fmt(subtotal)} + VAT = <strong>{fmt(totalVat)}</strong>
+              {totalDisc>0&&<span style={{color:"#7a9e7a", marginLeft:6}}>→ {fmt(finalTotal)} after discounts</span>}
             </div>
           </div>
-          <div style={{ background:PINK, color:"#000", padding:"8px 18px", borderRadius:20, fontSize:12, fontWeight:700, letterSpacing:1, flexShrink:0 }}>VIEW BILL →</div>
+          <div style={{background:PINK, color:"#000", padding:"8px 18px", borderRadius:20, fontSize:12, fontWeight:700, letterSpacing:1, flexShrink:0}}>VIEW BILL →</div>
         </div>
       )}
 
       {showBackTop && (
-        <button className="back-top" onClick={() => window.scrollTo({top:0,behavior:"smooth"})}
-          style={{ ...btn, position:"fixed", bottom:selectedItems.length>0&&activeTab==="select"?78:22, right:18, zIndex:200, background:"rgba(0,0,0,0.85)", border:`1px solid ${PINK}`, color:PINK, borderRadius:"50%", width:40, height:40, fontSize:17 }}>↑</button>
+        <button className="bt" onClick={()=>window.scrollTo({top:0,behavior:"smooth"})}
+          style={{...b, position:"fixed", bottom:selItems.length>0&&activeTab==="select"?78:22, right:18, zIndex:200, background:"rgba(0,0,0,0.85)", border:`1px solid ${PINK}`, color:PINK, borderRadius:"50%", width:40, height:40, fontSize:17}}>↑</button>
       )}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>

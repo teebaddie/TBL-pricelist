@@ -70,7 +70,10 @@ if ('serviceWorker' in navigator) {
 
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect } = React;
-const db = window.db; // capture Firebase reference in React scope
+
+// ── Initialize Firebase inside React scope so db is always defined ──
+if (!firebase.apps.length) firebase.initializeApp(window._firebaseConfig);
+const db = firebase.firestore();
 
 const DEFAULT_SERVICES = {
   "Consultation": [

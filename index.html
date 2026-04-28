@@ -313,30 +313,35 @@ function App() {
   const [bulkEditRows, setBulkEditRows] = useState([]);
 
   // Load prices
+  const seededRef = React.useRef(false);
+
   const load = async () => {
     try {
       const val = await fsGet();
       if (val) {
         try { setServices(buildFromStored(JSON.parse(val))); }
         catch(e) { setServices(sortedAlpha(clone(DEFAULT_SERVICES))); }
-      } else if (!services) {
-        // Only seed on very first load if nothing is in storage yet
+      } else if (!seededRef.current) {
+        // Only seed Firestore once — on the very first ever load when empty
+        seededRef.current = true;
         const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
         try { await fsSet(serialize(Object.keys(fresh), fresh)); } catch(e) {}
         setServices(fresh);
+      } else {
+        // Firestore returned nothing but we've already seeded — show defaults without overwriting
+        setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
       }
-      // If val is null but services already loaded, do nothing — don't overwrite with defaults
     } catch(e) {
-      if (!services) setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
+      setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
     }
   };
 
   useEffect(() => {
     load();
-    const iv = setInterval(load, 30000);
+    // Reload when user returns to the tab — no interval needed
     const onVis = () => { if (!document.hidden) load(); };
     document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   useEffect(() => {

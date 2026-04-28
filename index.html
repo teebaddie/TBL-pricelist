@@ -507,6 +507,7 @@ function App() {
   // Save
   const handleSave = async () => {
     if (!editData) return;
+    setSaveStatus("saving");
     const final = {}, storage = {};
     editData.catOrder.forEach(cat => {
       final[cat] = (editData.prices[cat] || []).map(item => ({ ...item, price: parseInt(String(item.price).replace(/[^0-9]/g, ""), 10) || 0 }));
@@ -517,8 +518,11 @@ function App() {
       setServices(final);
       setEditData({ catOrder: [...editData.catOrder], prices: clone(final) });
       setSaveStatus("saved");
-    } catch(e) { alert("Save failed: " + e.message); setSaveStatus("error"); }
-    setTimeout(() => setSaveStatus(""), 3000);
+    } catch(e) {
+      setSaveStatus("error");
+      alert("Save failed: " + e.message);
+    }
+    setTimeout(() => setSaveStatus(""), 4000);
   };
 
   const handleReset = async () => {
@@ -923,7 +927,10 @@ function App() {
                 <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>{editData.catOrder.length} categories · {editData.catOrder.reduce((s, c) => s + (editData.prices[c]?.length || 0), 0)} services</div>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                {saveStatus === "saved" && <span style={{ fontSize: 12, color: "#7a9e7a" }}>✓ Saved</span>}
+                {saveStatus === "saving" && <span style={{ fontSize: 12, color: "#888" }}>Saving…</span>}
+                {saveStatus === "saving" && <span style={{ fontSize: 12, color: "#888" }}>Saving…</span>}
+              {saveStatus === "saved" && <span style={{ fontSize: 12, color: "#7a9e7a" }}>✓ Saved</span>}
+              {saveStatus === "error" && <span style={{ fontSize: 12, color: "#c0392b" }}>✗ Failed</span>}
                 {saveStatus === "error" && <span style={{ fontSize: 12, color: "#c0392b" }}>✗ Failed</span>}
                 <button onClick={sortAlpha} style={{ ...b, padding: "7px 11px", background: "transparent", border: "1px solid #333", borderRadius: 7, color: "#888", fontSize: 11 }}>Sort A–Z</button>
                 <button onClick={() => setShowAddCat(true)} style={{ ...b, padding: "7px 11px", background: "rgba(243,194,215,0.08)", border: "1px solid rgba(243,194,215,0.3)", borderRadius: 7, color: PINK, fontSize: 11 }}>+ Category</button>

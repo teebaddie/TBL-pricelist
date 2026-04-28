@@ -317,13 +317,18 @@ function App() {
     try {
       const val = await fsGet();
       if (val) {
-        try { setServices(buildFromStored(JSON.parse(val))); } catch(e) { setServices(sortedAlpha(clone(DEFAULT_SERVICES))); }
-      } else {
+        try { setServices(buildFromStored(JSON.parse(val))); }
+        catch(e) { setServices(sortedAlpha(clone(DEFAULT_SERVICES))); }
+      } else if (!services) {
+        // Only seed on very first load if nothing is in storage yet
         const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
         try { await fsSet(serialize(Object.keys(fresh), fresh)); } catch(e) {}
         setServices(fresh);
       }
-    } catch(e) { setServices(sortedAlpha(clone(DEFAULT_SERVICES))); }
+      // If val is null but services already loaded, do nothing — don't overwrite with defaults
+    } catch(e) {
+      if (!services) setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
+    }
   };
 
   useEffect(() => {

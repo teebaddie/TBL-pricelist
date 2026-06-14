@@ -43,6 +43,8 @@ const { useState, useMemo, useEffect } = React;
 const FS_URL = "https://firestore.googleapis.com/v1/projects/tbl-pricelist/databases/(default)/documents/settings/prices";
 const FS_KEY = "AIzaSyA2ec8_5_sS3R1fU4lTEo_Kd9W11gNQ7Qo";
 
+const CACHE_KEY = "tbl_local_cache";
+
 async function fsGet() {
   try {
     const r = await fetch(FS_URL + "?key=" + FS_KEY);
@@ -316,29 +318,37 @@ function App() {
   const seededRef = React.useRef(false);
 
   const load = async () => {
+    // Step 1: Load from localStorage immediately — this NEVER gets wiped
+    const localCache = localStorage.getItem(CACHE_KEY);
+    if (localCache) {
+      try { setServices(buildFromStored(JSON.parse(localCache))); } catch(e) {}
+    }
+
+    // Step 2: Try Firestore to get the latest (for cross-device sync)
     try {
       const val = await fsGet();
       if (val) {
-        try { setServices(buildFromStored(JSON.parse(val))); }
-        catch(e) { setServices(sortedAlpha(clone(DEFAULT_SERVICES))); }
-      } else if (!seededRef.current) {
-        // Only seed Firestore once — on the very first ever load when empty
+        // Firestore has data — update localStorage and display
+        localStorage.setItem(CACHE_KEY, val);
+        try { setServices(buildFromStored(JSON.parse(val))); } catch(e) {}
+      } else if (!localCache && !seededRef.current) {
+        // Nothing anywhere — first ever load, seed with defaults
         seededRef.current = true;
         const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
-        try { await fsSet(serialize(Object.keys(fresh), fresh)); } catch(e) {}
+        const payload = serialize(Object.keys(fresh), fresh);
+        localStorage.setItem(CACHE_KEY, payload);
+        try { await fsSet(payload); } catch(e) {}
         setServices(fresh);
-      } else {
-        // Firestore returned nothing but we've already seeded — show defaults without overwriting
-        setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
       }
+      // If Firestore returns null but localStorage has data → keep localStorage, do NOT wipe
     } catch(e) {
-      setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
+      // Firestore failed — localStorage already loaded above, just ensure services is set
+      if (!localCache) setServices(sortedAlpha(clone(DEFAULT_SERVICES)));
     }
   };
 
   useEffect(() => {
     load();
-    // Reload when user returns to the tab — no interval needed
     const onVis = () => { if (!document.hidden) load(); };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
@@ -383,18 +393,18 @@ function App() {
     })).filter(x => x.service), [selected, services]);
 
   const subtotal = selItems.reduce((s, { service, qty }) => s + service.price * qty, 0);
-  const vat = Math.round(subtotal * VAT_RATE);
-  const totalVat = subtotal + vat;
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
   const hasAutoDiscount = selItems.some(({ service }) => service.autoDiscount);
   const consultDisc = (!suppressConsult && hasNonConsult)
     ? selItems.reduce((s, { service, qty }) => s + (service.autoDiscount || 0) * qty, 0) : 0;
   const manualDisc = discounts.reduce((s, d) => {
     const v = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
-    return s + (d.type === "percent" ? Math.round((v / 100) * totalVat) : v);
+    return s + (d.type === "percent" ? Math.round((v / 100) * subtotal) : v);
   }, 0);
   const totalDisc = consultDisc + manualDisc;
-  const finalTotal = Math.max(0, totalVat - totalDisc);
+  const discountedSubtotal = Math.max(0, subtotal - totalDisc);
+  const vat = Math.round(discountedSubtotal * VAT_RATE);
+  const finalTotal = discountedSubtotal + vat;
 
   const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); };
   const addDiscount = () => setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]);
@@ -523,27 +533,34 @@ function App() {
       final[cat] = (editData.prices[cat] || []).map(item => ({ ...item, price: parseInt(String(item.price).replace(/[^0-9]/g, ""), 10) || 0 }));
       storage[cat] = final[cat].map(({ name, price }) => ({ name, price }));
     });
+    const payload = serialize(editData.catOrder, final);
+
+    // Save to localStorage first (protects this device)
+    localStorage.setItem(CACHE_KEY, payload);
+    setServices(final);
+    setEditData({ catOrder: [...editData.catOrder], prices: clone(final) });
+
+    // Sync to Firestore (required for other devices to see changes)
     try {
-      await fsSet(serialize(editData.catOrder, final));
-      setServices(final);
-      setEditData({ catOrder: [...editData.catOrder], prices: clone(final) });
+      await fsSet(payload);
       setSaveStatus("saved");
     } catch(e) {
       setSaveStatus("error");
-      alert("Save failed: " + e.message);
+      alert("⚠️ Saved on this device only.\n\nFirestore sync failed — other devices will NOT see this update.\n\nError: " + e.message + "\n\nFix: Go to Firebase Console → Firestore → Rules and publish open read/write rules.");
     }
     setTimeout(() => setSaveStatus(""), 4000);
   };
 
   const handleReset = async () => {
     const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
-    try {
-      await fsSet(serialize(Object.keys(fresh), fresh));
-      setServices(fresh);
-      setEditData({ catOrder: Object.keys(fresh), prices: clone(fresh) });
-      setShowReset(false); setSaveStatus("saved");
-    } catch(e) { alert("Reset failed: " + e.message); }
-    setTimeout(() => setSaveStatus(""), 3000);
+    const payload = serialize(Object.keys(fresh), fresh);
+    localStorage.setItem(CACHE_KEY, payload);
+    setServices(fresh);
+    setEditData({ catOrder: Object.keys(fresh), prices: clone(fresh) });
+    setShowReset(false);
+    setSaveStatus("saved");
+    try { await fsSet(payload); } catch(e) {}
+    setTimeout(() => setSaveStatus(""), 4000);
   };
 
   const H = 63;
@@ -844,20 +861,12 @@ function App() {
 
               <div style={{ background: "#0d0d0d", borderRadius: 12, border: "1px solid rgba(243,194,215,0.25)", padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ color: "#888", fontSize: 14 }}>Subtotal (excl. VAT)</span>
+                  <span style={{ color: "#888", fontSize: 14 }}>Subtotal</span>
                   <span style={{ color: "#ccc", fontSize: 14 }}>{fmt(subtotal)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #222" }}>
-                  <span style={{ color: "#888", fontSize: 14 }}>VAT (7.5%)</span>
-                  <span style={{ color: "#ccc", fontSize: 14 }}>{fmt(vat)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                  <span style={{ color: "#aaa", fontSize: 14 }}>Total (after VAT)</span>
-                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{fmt(totalVat)}</span>
                 </div>
 
                 {(consultDisc > 0 || manualDisc > 0) && (
-                  <div style={{ background: "rgba(90,138,90,0.1)", border: "1px solid rgba(90,138,90,0.25)", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+                  <div style={{ background: "rgba(90,138,90,0.1)", border: "1px solid rgba(90,138,90,0.25)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
                     <div style={{ fontSize: 10, color: "#7a9e7a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Discounts Applied</div>
                     {consultDisc > 0 && (
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -870,7 +879,7 @@ function App() {
                     )}
                     {discounts.filter(d => (parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0) > 0).map(d => {
                       const raw = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
-                      const val = d.type === "percent" ? Math.round((raw / 100) * totalVat) : raw;
+                      const val = d.type === "percent" ? Math.round((raw / 100) * subtotal) : raw;
                       return (
                         <div key={d.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                           <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Manual discount{d.type === "percent" ? ` (${raw}%)` : ""}</span>
@@ -880,6 +889,15 @@ function App() {
                     })}
                   </div>
                 )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ color: "#aaa", fontSize: 14 }}>Subtotal after discounts</span>
+                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{fmt(discountedSubtotal)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #222" }}>
+                  <span style={{ color: "#888", fontSize: 14 }}>VAT (7.5%)</span>
+                  <span style={{ color: "#ccc", fontSize: 14 }}>{fmt(vat)}</span>
+                </div>
 
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Discounts</div>
@@ -1062,8 +1080,7 @@ function App() {
           <div>
             <div style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>{selItems.length} service{selItems.length !== 1 ? "s" : ""} selected</div>
             <div style={{ fontSize: 13, color: PINK, marginTop: 2 }}>
-              {fmt(subtotal)} + VAT = <strong>{fmt(totalVat)}</strong>
-              {totalDisc > 0 && <span style={{ color: "#7a9e7a", marginLeft: 6 }}>→ {fmt(finalTotal)} after discounts</span>}
+              {fmt(subtotal)}{totalDisc > 0 ? ` − ${fmt(totalDisc)}` : ""} + VAT = <strong>{fmt(finalTotal)}</strong>
             </div>
           </div>
           <div style={{ background: PINK, color: "#000", padding: "8px 18px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>VIEW BILL →</div>

@@ -410,18 +410,11 @@ function App() {
     const q = n[key].qty + d;
     if (q <= 0) delete n[key]; else n[key] = { ...n[key], qty: q }; return n;
   });
-  // Set an exact unit count for per-unit services (used by the Units field). Blank is allowed while typing.
-  const setUnits = (key, val) => setSelected(p => {
+  // Per-unit counter: starts at the minimum, +/- steps by one unit, never drops below the minimum.
+  const stepUnits = (key, delta, min) => setSelected(p => {
     const n = { ...p }; if (!n[key]) return n;
-    const digits = String(val).replace(/[^0-9]/g, "");
-    n[key] = { ...n[key], qty: digits === "" ? "" : parseInt(digits, 10) };
-    return n;
-  });
-  // Enforce the minimum when the Units field loses focus.
-  const commitUnits = (key, min) => setSelected(p => {
-    const n = { ...p }; if (!n[key]) return n;
-    const q = parseInt(n[key].qty, 10);
-    n[key] = { ...n[key], qty: (!q || q < min) ? min : q };
+    const cur = parseInt(n[key].qty, 10) || min;
+    n[key] = { ...n[key], qty: Math.max(min, cur + delta) };
     return n;
   });
 
@@ -892,11 +885,15 @@ function App() {
                       <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>
                     </div>
                     {perUnit ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 12 }}>
-                        <input className="fi" type="number" inputMode="numeric" min={service.minUnits} value={qty}
-                          onChange={e => setUnits(key, e.target.value)} onBlur={() => commitUnits(key, service.minUnits)}
-                          style={{ width: 62, padding: "7px 8px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit", textAlign: "center" }} />
-                        <span style={{ fontSize: 11, color: "#777" }}>units</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12 }}>
+                        <button onClick={() => stepUnits(key, -1, service.minUnits)} disabled={(parseInt(qty, 10) || service.minUnits) <= service.minUnits}
+                          style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid #333", background: "none", color: (parseInt(qty, 10) || service.minUnits) <= service.minUnits ? "#444" : "#888", fontSize: 17, cursor: (parseInt(qty, 10) || service.minUnits) <= service.minUnits ? "default" : "pointer" }}>−</button>
+                        <span style={{ minWidth: 34, textAlign: "center", color: PINK, fontWeight: 600, lineHeight: 1.1 }}>
+                          <span style={{ fontSize: 13 }}>{qty}</span>
+                          <span style={{ fontSize: 9, color: "#777", display: "block", fontWeight: 400 }}>units</span>
+                        </span>
+                        <button onClick={() => stepUnits(key, 1, service.minUnits)}
+                          style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#888", fontSize: 17 }}>+</button>
                       </div>
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12 }}>

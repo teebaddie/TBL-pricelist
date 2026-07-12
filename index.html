@@ -131,15 +131,15 @@ const DEFAULT_SERVICES = {
     { name: "Liquid BBL 600ml + Hip Dip Special", price: 2000000 },
   ],
   "Botox – Anti-Aging": [
-    { name: "Forehead Lines", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Frown Lines (11s / Glabellar)", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Crow's Feet", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Brow Lift", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Bunny Lines", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Lip Flip", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Chin Dimpling", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Neck / Nefertiti Lift", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
-    { name: "Full Upper Face", price: 5000, perUnit: true, unitPrice: 5000, minUnits: 20 },
+    { name: "Forehead Lines", price: 150000 },
+    { name: "Frown Lines (11s / Glabellar)", price: 150000 },
+    { name: "Crow's Feet", price: 130000 },
+    { name: "Brow Lift", price: 80000 },
+    { name: "Bunny Lines", price: 80000 },
+    { name: "Lip Flip", price: 70000 },
+    { name: "Chin Dimpling", price: 80000 },
+    { name: "Neck / Nefertiti Lift", price: 220000 },
+    { name: "Full Upper Face", price: 320000 },
   ],
   "Botox – Facial Contouring": [
     { name: "Gummy Smile", price: 70000 },
@@ -157,7 +157,7 @@ const DEFAULT_SERVICES = {
     { name: "Trap Tox / Shoulder Slimming", price: 420000 },
   ],
   "Botox – Add-On": [
-    { name: "Additional Units (per unit)", price: 8000 },
+    { name: "Additional Units (per unit)", price: 8000, perUnit: true, unitPrice: 8000, minUnits: 20 },
   ],
   "Body Sculpting & Sauna": [
     { name: "Baddie Sculpting 1hr Session", price: 45000 }, { name: "Baddie Sculpting + Sauna Blanket", price: 55000 },
@@ -167,6 +167,7 @@ const DEFAULT_SERVICES = {
     { name: "Post-OP Lymphatic Drainage Massage", price: 45000 }, { name: "The Cookie Reset Vaginal Rejuvenation", price: 75000 },
     { name: "Teeth Whitening - Gold", price: 40000 }, { name: "Teeth Whitening - Diamond", price: 50000 },
     { name: "Numbing Cream (per area)", price: 10000 }, { name: "VIP Room - Single Person", price: 15000 }, { name: "VIP Room - Couple", price: 25000 },
+    { name: "After Work Hours", price: 50000 },
   ],
   "Home Service": [
     { name: "Home Service - Within Lekki Phase 1", price: 50000 }, { name: "Home Service - Within the Island", price: 100000 }, { name: "Home Service - Mainland", price: 200000 },
@@ -200,6 +201,8 @@ const DEFAULT_SERVICES = {
     { name: "Head, Neck & Shoulder 60 mins", price: 65000 }, { name: "Hand Massage 30 mins", price: 20000 },
     { name: "Foot & Leg Massage 30 mins", price: 35000 }, { name: "Foot & Leg Massage 45 mins", price: 45000 },
     { name: "Every 10 Minute Increment", price: 10000 },
+    { name: "Hand Massage Add-On", price: 10000 }, { name: "Foot & Leg Massage Add-On", price: 15000 },
+    { name: "Hand & Feet Massage Add-On", price: 22000 }, { name: "Brows", price: 18000 },
   ],
   "Laser - Women (Intro)": [
     { name: "Upper Lip (W-Intro)", price: 18000 }, { name: "Chin (W-Intro)", price: 30000 }, { name: "Chin + Upper Lip (W-Intro)", price: 45000 },
@@ -209,6 +212,7 @@ const DEFAULT_SERVICES = {
     { name: "Buttocks/Perianal Add-On (W-Intro)", price: 45000 }, { name: "Chest (W-Intro)", price: 50000 }, { name: "Abdomen (W-Intro)", price: 45000 },
     { name: "Full Back (W-Intro)", price: 65000 }, { name: "Back + Shoulders (W-Intro)", price: 95000 }, { name: "Half Legs (W-Intro)", price: 60000 },
     { name: "Full Legs (W-Intro)", price: 85000 }, { name: "Full Body (W-Intro)", price: 275000 },
+    { name: "Brows (W-Intro)", price: 25000 },
   ],
   "Laser - Women (Standard)": [
     { name: "Upper Lip (W-Std)", price: 25000 }, { name: "Chin (W-Std)", price: 45000 }, { name: "Chin + Upper Lip (W-Std)", price: 70000 },
@@ -218,6 +222,7 @@ const DEFAULT_SERVICES = {
     { name: "Buttocks/Perianal Add-On (W-Std)", price: 60000 }, { name: "Chest (W-Std)", price: 75000 }, { name: "Abdomen (W-Std)", price: 60000 },
     { name: "Full Back (W-Std)", price: 95000 }, { name: "Back + Shoulders (W-Std)", price: 125000 }, { name: "Half Legs (W-Std)", price: 85000 },
     { name: "Full Legs (W-Std)", price: 120000 }, { name: "Full Body (W-Std)", price: 395000 },
+    { name: "Brows (W-Std)", price: 25000 },
   ],
   "Laser - Men (Intro)": [
     { name: "Upper Lip (M-Intro)", price: 25000 }, { name: "Chin (M-Intro)", price: 40000 }, { name: "Chin + Upper Lip (M-Intro)", price: 60000 },
@@ -227,6 +232,7 @@ const DEFAULT_SERVICES = {
     { name: "Chest (M-Intro)", price: 65000 }, { name: "Abdomen (M-Intro)", price: 60000 }, { name: "Full Back (M-Intro)", price: 85000 },
     { name: "Back + Shoulders (M-Intro)", price: 120000 }, { name: "Half Legs (M-Intro)", price: 85000 }, { name: "Full Legs (M-Intro)", price: 110000 },
     { name: "Full Body (M-Intro)", price: 325000 },
+    { name: "Head (M-Intro)", price: 140000 }, { name: "Brows (M-Intro)", price: 35000 },
   ],
   "Laser - Men (Standard)": [
     { name: "Upper Lip (M-Std)", price: 35000 }, { name: "Chin (M-Std)", price: 55000 }, { name: "Chin + Upper Lip (M-Std)", price: 85000 },
@@ -236,6 +242,7 @@ const DEFAULT_SERVICES = {
     { name: "Chest (M-Std)", price: 95000 }, { name: "Abdomen (M-Std)", price: 75000 }, { name: "Full Back (M-Std)", price: 120000 },
     { name: "Back + Shoulders (M-Std)", price: 155000 }, { name: "Half Legs (M-Std)", price: 110000 }, { name: "Full Legs (M-Std)", price: 155000 },
     { name: "Full Body (M-Std)", price: 465000 },
+    { name: "Head (M-Std)", price: 195000 },
   ],
 };
 
@@ -281,6 +288,8 @@ function buildFromStored(stored) {
         }
         return { name: si.name, price: Number(si.price) || 0 };
       });
+      // Merge in any new default items (price-list additions) not present in stored data
+      defs.forEach(d => { if (!out[cat].some(x => x.name === d.name)) out[cat].push(clone(d)); });
     } else { out[cat] = clone(defs); }
   });
   // Merge in any new default categories not yet in storage

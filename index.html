@@ -251,18 +251,18 @@ const BUNDLES = {
   "Weight Loss Programs": WL_BUNDLE,
   "Appetite Kickstart": WL_BUNDLE,
   "Botox – Anti-Aging": [
-    { s: "Dermal Fillers", why: "Botox relaxes movement, filler restores volume — together they give complete, balanced rejuvenation (the gold-standard “tox + filler” combo).", n: "1 filler session" },
-    { s: "Glass Act skin booster or a facial", why: "Botox smooths lines but not skin texture or glow — a booster or facial finishes the surface.", n: "3 boosters / 4–6 facials" },
+    { s: "Dermal Fillers", why: "Botox relaxes movement, filler restores volume — together they give complete, balanced rejuvenation (the gold-standard “tox + filler” combo).", n: "1 filler session", add: { cat: "Fillers", name: "Dermal Filler Package 3ml", qty: 1 } },
+    { s: "Glass Act skin booster", why: "Botox smooths lines but not skin texture or glow — a booster finishes the surface.", n: "3 boosters", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
     { s: "Rebook Botox", why: "Botox fades at 3–4 months; pre-booking keeps results consistent.", n: "every 3–4 months" },
   ],
   "Botox – Facial Contouring": [
-    { s: "Dermal Fillers (chin / jaw)", why: "Pair jaw-slimming or contouring Botox with filler to truly sculpt and define the lower face.", n: "1 session" },
-    { s: "Glass Act skin booster", why: "Adds skin glow to the sharper new contour.", n: "3 sessions" },
+    { s: "Dermal Fillers (chin)", why: "Pair jaw-slimming or contouring Botox with filler to truly sculpt and define the lower face.", n: "1 session", add: { cat: "Fillers", name: "Chin Enhancement 1ml", qty: 1 } },
+    { s: "Glass Act skin booster", why: "Adds skin glow to the sharper new contour.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
   ],
   "Fillers": [
-    { s: "Botox", why: "Balance the new volume with muscle-relaxing Botox so dynamic lines don’t fight the filler.", n: "1 session" },
-    { s: "Glass Act skin booster", why: "Surface hydration and glow to complement the structural volume.", n: "3 sessions" },
-    { s: "Lip Flip (with lip filler)", why: "Enhances the pout for a fuller finish.", n: "1 session" },
+    { s: "Botox – Full Upper Face", why: "Balance the new volume with muscle-relaxing Botox so dynamic lines don’t fight the filler.", n: "1 session", add: { cat: "Botox – Anti-Aging", name: "Full Upper Face", qty: 1 } },
+    { s: "Glass Act skin booster", why: "Surface hydration and glow to complement the structural volume.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+    { s: "Lip Flip", why: "Enhances the pout for a fuller finish.", n: "1 session", add: { cat: "Botox – Anti-Aging", name: "Lip Flip", qty: 1 } },
   ],
   "Laser": [
     { s: "Complete the 6–8 session course", why: "Laser only gives permanent reduction over a full course — a single session just slows regrowth. This is the #1 thing to book.", n: "6–8 sessions" },
@@ -286,7 +286,7 @@ const BUNDLES = {
   ],
   "Hair Restoration": [
     { s: "Course of 3–6 monthly, then maintenance", why: "PRP needs repeated sessions to wake dormant follicles; results build over months.", n: "3–6 monthly, then every 3–6 months" },
-    { s: "Biotin shots", why: "Support hair growth from within alongside the injections.", n: "monthly" },
+    { s: "Biotin shots", why: "Support hair growth from within alongside the injections.", n: "monthly", add: { cat: "IM Injections", name: "Biotin", qty: 1 } },
   ],
   "Fat Dissolve": [
     { s: "2–4 sessions per area", why: "Fat dissolving is progressive — most areas need repeat treatments 4–6 weeks apart.", n: "2–4 per area" },
@@ -301,8 +301,8 @@ const BUNDLES = {
     { s: "Fat Dissolve for stubborn pockets", why: "Targets fat that won’t shift with sculpting alone.", n: "2–4 per area" },
   ],
   "NAD+ Treatment": [
-    { s: "Book a series / VIP Drip Club", why: "NAD works best as a course; VIP 5/10 makes a regimen cheaper per drip.", n: "weekly series / VIP 5–10" },
-    { s: "Add Glutathione or Vitamin C", why: "Layer brightening and antioxidant support onto the NAD base.", n: "per drip" },
+    { s: "VIP Drip Club (VIP 5)", why: "NAD works best as a course; VIP 5/10 makes a regimen cheaper per drip.", n: "VIP 5", add: { cat: "VIP Drip Club", name: "VIP 5", qty: 1 } },
+    { s: "Glutathione IM", why: "Layer brightening and antioxidant support onto the NAD base.", n: "per drip", add: { cat: "IM Injections", name: "Glutathione IM", qty: 1 } },
   ],
   "IV Infusions": [
     { s: "VIP Drip Club (5 or 10)", why: "Drips deliver best results as a regimen — the VIP packages save money per session.", n: "VIP 5 or 10" },
@@ -330,6 +330,55 @@ const BUNDLES = {
   ],
   "Packages — Intimate": [
     { s: "Brazilian laser course", why: "Pairs naturally with intimate rejuvenation for a complete result.", n: "6–8 sessions" },
+  ],
+};
+// Item-level complementary suggestions, keyed by exact service name. These
+// take priority over the category-level BUNDLES above. Drips are paired by
+// PURPOSE: skin-care drips (glutathione / glow) pair with facials & boosters;
+// wellness / anti-aging drips pair with health, longevity and skin services —
+// not just the VIP room.
+// Each suggestion may carry `add: { cat, name, qty }` pointing to a real menu
+// service. When it resolves, the bill shows a clickable "+ Add" button that
+// drops that service into the cart with the recommended number of sessions.
+const ITEM_BUNDLES = {
+  // ── Skin-care drips → complement with facials & skin boosters ──
+  "Glass Skin Treatment Drip": [
+    { s: "Brightening Facial", why: "Glass Skin is a glutathione drip — it brightens from the inside. A topical brightening facial layers on top so the glow shows faster and more evenly on the skin.", n: "4–6 facials", add: { cat: "Facials", name: "Brightening Facial 75 mins", qty: 6 } },
+    { s: "Glass Act skin booster", why: "The drip works from within; the booster hydrates and plumps the surface — together they give the true 'glass' finish.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+    { s: "The Big Peel (TCA)", why: "For pigmentation or dullness the drip can't fully clear, a peel course resurfaces the skin.", n: "3–6 sessions", add: { cat: "Advanced Facials & Boosters", name: "The Big Peel (TCA)", qty: 3 } },
+  ],
+  "Billion Dollar Bawdy Drip": [
+    { s: "Glass Act skin booster", why: "It's a beauty / glow drip — a booster adds surface hydration and glow to match the boost from within.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+    { s: "Brightening Facial", why: "A brightening facial finishes the glow on the surface.", n: "4–6 facials", add: { cat: "Facials", name: "Brightening Facial 75 mins", qty: 6 } },
+    { s: "VIP Drip Club (VIP 5)", why: "Glow drips give the best results as a regimen; VIP pricing lowers the per-drip cost.", n: "VIP 5", add: { cat: "VIP Drip Club", name: "VIP 5", qty: 1 } },
+  ],
+  "Trillion Dollar Bawdy Drip": [
+    { s: "Glass Act skin booster", why: "Premium beauty drip — finish the glow on the surface with a booster.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+    { s: "Brightening Facial", why: "A brightening facial adds topical glow to match the drip.", n: "4–6 facials", add: { cat: "Facials", name: "Brightening Facial 75 mins", qty: 6 } },
+    { s: "VIP Drip Club (VIP 10)", why: "Best as a regimen; the larger VIP pack lowers the per-drip cost most.", n: "VIP 10", add: { cat: "VIP Drip Club", name: "VIP 10", qty: 1 } },
+  ],
+  "Glutathione (Add-on)": [
+    { s: "Brightening Facial", why: "Glutathione brightens systemically — a topical brightening facial makes the glow show faster on the skin.", n: "4–6 facials", add: { cat: "Facials", name: "Brightening Facial 75 mins", qty: 6 } },
+    { s: "Glass Act skin booster", why: "Adds surface hydration and glow to the brightening effect.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+  ],
+  // ── Wellness / anti-aging drips → health, longevity & skin, not just VIP ──
+  "Baddie Lifestyle (Myers Cocktail) Drip": [
+    { s: "NAD+ Drip 250mg", why: "The Myers cocktail restocks vitamins; NAD+ adds cellular energy and longevity — together they make a complete wellness stack.", n: "weekly series", add: { cat: "NAD+ Treatment", name: "NAD+ Drip 250mg", qty: 1 } },
+    { s: "Vitamin B12 shot", why: "Sustains the energy lift between drips.", n: "monthly", add: { cat: "IM Injections", name: "Vitamin B12", qty: 1 } },
+    { s: "VIP Drip Club (VIP 5)", why: "Wellness drips work best regularly; VIP pricing lowers the per-drip cost.", n: "VIP 5", add: { cat: "VIP Drip Club", name: "VIP 5", qty: 1 } },
+  ],
+  "Fountain of Youth Drip": [
+    { s: "Glass Act skin booster", why: "It's an anti-aging drip — pair topical anti-aging on the skin so the results show on the surface too.", n: "3 sessions", add: { cat: "Advanced Facials & Boosters", name: "Glass Act skin booster", qty: 3 } },
+    { s: "Botox – Full Upper Face", why: "For visible anti-aging, add tox to soften lines alongside the boost from within.", n: "1 session", add: { cat: "Botox – Anti-Aging", name: "Full Upper Face", qty: 1 } },
+    { s: "NAD+ Drip 250mg", why: "Cellular longevity support to match the anti-aging goal.", n: "weekly series", add: { cat: "NAD+ Treatment", name: "NAD+ Drip 250mg", qty: 1 } },
+  ],
+  "Dreambody Post & Pre OP Drip": [
+    { s: "Baddie Sculpting + Sauna", why: "Speeds healing and reduces post-op swelling and fluid retention.", n: "6–10 sessions", add: { cat: "Body Sculpting & Sauna", name: "Baddie Sculpting + Sauna Blanket", qty: 6 } },
+    { s: "Baddie Lifestyle (Myers) drip", why: "Ongoing recovery nutrition and hydration through the healing window.", n: "as needed", add: { cat: "IV Infusions", name: "Baddie Lifestyle (Myers Cocktail) Drip", qty: 1 } },
+  ],
+  "Quick Drip Boost": [
+    { s: "VIP Drip Club (VIP 5)", why: "A quick boost is best topped up regularly; VIP pricing lowers the per-drip cost.", n: "VIP 5", add: { cat: "VIP Drip Club", name: "VIP 5", qty: 1 } },
+    { s: "Vitamin B12 shot", why: "Add a targeted energy shot to the hydration boost.", n: "monthly", add: { cat: "IM Injections", name: "Vitamin B12", qty: 1 } },
   ],
 };
 const PKG_CATS = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Intimate", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
@@ -511,6 +560,18 @@ function App() {
     const startQty = svc && svc.perUnit ? (svc.minUnits || 1) : 1;
     setSelected(p => { const n = { ...p }; n[key] ? delete n[key] : (n[key] = { cat, idx, qty: startQty }); return n; });
   };
+  // Resolve a suggested service (by category + exact name) to its menu index.
+  const findSvcIdx = (cat, name) => (services && services[cat]) ? services[cat].findIndex(s => s.name === name) : -1;
+  // Add a suggested complementary service straight to the cart with the
+  // recommended number of sessions (used by the bundle "+ Add" buttons).
+  const addSuggestion = (cat, name, qty) => {
+    const idx = findSvcIdx(cat, name);
+    if (idx < 0) return;
+    const svc = services[cat][idx];
+    const q = svc && svc.perUnit ? Math.max(svc.minUnits || 1, qty || 1) : (qty || 1);
+    const key = `${cat}|||${idx}`;
+    setSelected(p => ({ ...p, [key]: { cat, idx, qty: q } }));
+  };
   const updateQty = (key, d) => setSelected(p => {
     const n = { ...p }; if (!n[key]) return n;
     const q = n[key].qty + d;
@@ -567,7 +628,12 @@ function App() {
   }, [selItems, autoMode, discountDay]);
   const cartHasConsult = selItems.some(({ service }) => service && service.isConsultation);
   const effToday = discountDay === "today" && cartHasConsult;
-  const bundleSuggestCats = [...new Set(selItems.map(x => x.cat))].filter(c => BUNDLES[c]);
+  // Per-selected-item complementary suggestions: prefer an item-level match,
+  // fall back to the category. Labelled by the service name on the bill.
+  const bundleSuggestItems = selItems
+    .map(({ cat, service }) => ({ name: service.name, sug: ITEM_BUNDLES[service.name] || BUNDLES[cat] }))
+    .filter(x => x.sug)
+    .filter((x, i, arr) => arr.findIndex(y => y.name === x.name) === i);
   // Category ordering: regular services (A–Z), then Packages, then Pre-Aug-1 intro pricing.
   const regCats = services ? Object.keys(services).filter(c => !PKG_CATS.has(c) && !INTRO_CATS.has(c)) : [];
   const pkgCats = services ? Object.keys(services).filter(c => PKG_CATS.has(c) && !INTRO_CATS.has(c)) : [];
@@ -995,7 +1061,7 @@ function App() {
                             <div>
                               <span style={{ fontSize: 13, color: isSel ? "#fff" : "#888" }}>{svc.name}</span>
                               {DESCRIPTIONS[cat + "|||" + svc.name] && <div style={{ fontSize: 10.5, color: "#777", marginTop: 3, lineHeight: 1.4, maxWidth: 470 }}>{DESCRIPTIONS[cat + "|||" + svc.name]}</div>}
-                              {isSel && BUNDLES[cat] && <div style={{ fontSize: 10.5, color: PINK, marginTop: 3, lineHeight: 1.4, maxWidth: 470 }}>💡 Bundle with {BUNDLES[cat][0].s} — see the bill for why & sessions</div>}
+                              {isSel && (ITEM_BUNDLES[svc.name] || BUNDLES[cat]) && <div style={{ fontSize: 10.5, color: PINK, marginTop: 3, lineHeight: 1.4, maxWidth: 470 }}>💡 Bundle with {(ITEM_BUNDLES[svc.name] || BUNDLES[cat])[0].s} — see the bill for why, sessions & one-tap add</div>}
                             </div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
@@ -1206,19 +1272,30 @@ function App() {
                 </div>
               </div>
 
-              {bundleSuggestCats.length > 0 && (
+              {bundleSuggestItems.length > 0 && (
                 <div style={{ background: "linear-gradient(180deg, rgba(243,194,215,0.06), #0d0d0d)", borderRadius: 12, border: "1px solid rgba(243,194,215,0.28)", padding: 18, marginTop: 14 }}>
                   <div style={{ fontSize: 12, color: PINK, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>💡 Suggested Bundles & Cross-Sells</div>
-                  <div style={{ fontSize: 10.5, color: "#888", marginBottom: 14 }}>Based on what's in the cart — use these to guide the client on what pairs well and how many sessions to book.</div>
-                  {bundleSuggestCats.map(c => (
-                    <div key={c} style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 11, color: "#ddd", fontWeight: 600, marginBottom: 7, borderBottom: "1px solid rgba(243,194,215,0.12)", paddingBottom: 5 }}>Because they're getting <span style={{ color: PINK }}>{c}</span></div>
-                      {BUNDLES[c].map((b, bi) => (
-                        <div key={bi} style={{ marginBottom: 9, paddingLeft: 4 }}>
-                          <div style={{ fontSize: 12.5, color: "#f0d8e4", fontWeight: 600 }}>→ {b.s} <span style={{ color: "#7a9e7a", fontWeight: 400 }}>· {b.n}</span></div>
-                          <div style={{ fontSize: 11, color: "#999", lineHeight: 1.5, marginTop: 2 }}>{b.why}</div>
-                        </div>
-                      ))}
+                  <div style={{ fontSize: 10.5, color: "#888", marginBottom: 14 }}>Complementary services for each item in the cart. If the client says yes, tap <span style={{ color: "#8aba8a" }}>+ Add</span> to drop it into the bill with the recommended sessions.</div>
+                  {bundleSuggestItems.map((it, ii) => (
+                    <div key={it.name} style={{ marginBottom: ii === bundleSuggestItems.length - 1 ? 0 : 12, padding: "12px 14px", background: "rgba(243,194,215,0.045)", border: "1px solid rgba(243,194,215,0.18)", borderRadius: 10 }}>
+                      <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 700, marginBottom: 10, paddingBottom: 8, borderBottom: "1px solid rgba(243,194,215,0.18)" }}>Because they're getting <span style={{ color: PINK }}>{it.name}</span>, pair with:</div>
+                      {it.sug.map((b, bi) => {
+                        const ai = b.add ? findSvcIdx(b.add.cat, b.add.name) : -1;
+                        const inCart = ai >= 0 && !!selected[`${b.add.cat}|||${ai}`];
+                        return (
+                          <div key={bi} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: bi === it.sug.length - 1 ? 0 : 11, paddingLeft: 2 }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 12.5, color: "#f0d8e4", fontWeight: 600 }}>→ {b.s} <span style={{ color: "#7a9e7a", fontWeight: 400 }}>· {b.n}</span></div>
+                              <div style={{ fontSize: 11, color: "#999", lineHeight: 1.5, marginTop: 2 }}>{b.why}</div>
+                            </div>
+                            {ai >= 0 && (
+                              inCart
+                                ? <span style={{ flexShrink: 0, fontSize: 10.5, color: "#7a9e7a", fontWeight: 600, whiteSpace: "nowrap", padding: "5px 8px" }}>✓ In cart</span>
+                                : <button onClick={() => addSuggestion(b.add.cat, b.add.name, b.add.qty)} style={{ flexShrink: 0, fontSize: 11, color: "#8aba8a", background: "rgba(138,186,138,0.1)", border: "1px solid rgba(138,186,138,0.35)", borderRadius: 6, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600 }}>+ Add {b.add.qty}</button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -1233,7 +1310,7 @@ function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>8–11 sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>14% today · 8% later</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>12+ sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>16% today · 10% later</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>Package bundles &amp; weight-loss programs</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later</span></div>
-                  <div style={{ marginTop: 8, color: "#888" }}><strong style={{ color: "#aaa" }}>Today</strong> = booked at the consultation visit (needs a Consultation in the cart). <strong style={{ color: "#aaa" }}>Later</strong> = returning / follow-up. Without a Consultation in the cart the calculator uses Later rates automatically. Pre-Aug-1 intro items get no discount.</div>
+                  <div style={{ marginTop: 8, color: "#888" }}><strong style={{ color: "#aaa" }}>Today</strong> = booked at the consultation visit (needs a Consultation in the cart). <strong style={{ color: "#aaa" }}>Later</strong> = returning / follow-up. Without a Consultation in the cart the calculator uses Later rates automatically.</div>
                   <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(243,194,215,0.05)", border: "1px solid rgba(243,194,215,0.15)", borderRadius: 8, color: "#ccc" }}>
                     <strong style={{ color: PINK }}>Example:</strong> Client at consultation buys 4 laser sessions at ₦50,000 = ₦200,000. Today → 12% = ₦24,000 off. ₦176,000 + 7.5% VAT (₦13,200) = <strong style={{ color: "#fff" }}>₦189,200</strong>.
                   </div>

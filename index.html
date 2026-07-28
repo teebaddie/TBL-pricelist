@@ -220,7 +220,7 @@ const DEFAULT_SERVICES = {
     { name: "Fat Dissolve (per area) — 3 sessions", price: 120000 }, { name: "Fat Dissolve (per area) — 6 sessions", price: 240000 }, { name: "Baddie Sculpting — 6 sessions", price: 270000 }, { name: "Baddie Sculpting — 10 sessions", price: 450000 },
   ],
   "Weight-Loss Programs (GLP-1)": [
-    { name: "Semaglutide (Kim-K) — Snack Size (1 mo)", price: 770000 }, { name: "Semaglutide (Kim-K) — Full Course (2 mo)", price: 1540000 }, { name: "Semaglutide (Kim-K) — Chef's Kiss (3 mo)", price: 2310000 }, { name: "Ozempic — Snack Size (1 mo)", price: 850000 }, { name: "Ozempic — Full Course (2 mo)", price: 1700000 }, { name: "Ozempic — Chef's Kiss (3 mo)", price: 2550000 }, { name: "Tirzepatide — Snack Size (1 mo)", price: 1070000 }, { name: "Tirzepatide — Full Course (2 mo)", price: 2140000 }, { name: "Tirzepatide — Chef's Kiss (3 mo)", price: 3210000 }, { name: "Mounjaro — Snack Size (1 mo)", price: 1000000 }, { name: "Mounjaro — Full Course (2 mo)", price: 2000000 }, { name: "Mounjaro — Chef's Kiss (3 mo)", price: 3000000 },
+    { name: "Tirzepatide 2.5–5mg — 1 month", price: 1070000 }, { name: "Tirzepatide 2.5–5mg — 2 months", price: 2140000 }, { name: "Tirzepatide 2.5–5mg — 3 months", price: 3210000 }, { name: "Tirzepatide 5–10mg — 1 month", price: 1160000 }, { name: "Tirzepatide 5–10mg — 2 months", price: 2320000 }, { name: "Tirzepatide 5–10mg — 3 months", price: 3480000 }, { name: "Tirzepatide 10–15mg — 1 month", price: 1220000 }, { name: "Tirzepatide 10–15mg — 2 months", price: 2440000 }, { name: "Tirzepatide 10–15mg — 3 months", price: 3660000 }, { name: "Mounjaro 2.5–5mg — 1 month", price: 1027500 }, { name: "Mounjaro 2.5–5mg — 2 months", price: 2055000 }, { name: "Mounjaro 2.5–5mg — 3 months", price: 3082500 }, { name: "Mounjaro 5–10mg — 1 month", price: 1265000 }, { name: "Mounjaro 5–10mg — 2 months", price: 2530000 }, { name: "Mounjaro 5–10mg — 3 months", price: 3795000 }, { name: "Mounjaro 10–15mg — 1 month", price: 1510000 }, { name: "Mounjaro 10–15mg — 2 months", price: 3020000 }, { name: "Mounjaro 10–15mg — 3 months", price: 4530000 }, { name: "Ozempic 0.5mg — 1 month", price: 850000 }, { name: "Ozempic 0.5mg — 2 months", price: 1700000 }, { name: "Ozempic 0.5mg — 3 months", price: 2550000 }, { name: "Ozempic 1mg — 1 month", price: 925000 }, { name: "Ozempic 1mg — 2 months", price: 1850000 }, { name: "Ozempic 1mg — 3 months", price: 2775000 }, { name: "Semaglutide (Kim-K) 0.25–0.5mg — 1 month", price: 770000 }, { name: "Semaglutide (Kim-K) 0.25–0.5mg — 2 months", price: 1540000 }, { name: "Semaglutide (Kim-K) 0.25–0.5mg — 3 months", price: 2310000 }
   ],
   "VIP Drip Club": [
     { name: "VIP 5", price: 475000 }, { name: "VIP 10", price: 950000 },
@@ -228,11 +228,15 @@ const DEFAULT_SERVICES = {
   "Appetite Kickstart": [
     { name: "Appetite Kickstart — Snack Size", price: 650000 },
   ],
+  "GLP-1 Program Add-Ons": [
+    { name: "NAD Sub-Q", price: 45000 }, { name: "NAD IM", price: 85000 }, { name: "Biotin", price: 30000 },
+  ],
 };
 
-const STAFF_ONLY = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Hair Restoration", "Packages — Intimate", "Packages — Laser Courses", "Packages — Body & Contouring", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
+const PKG_CATS = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Hair Restoration", "Packages — Intimate", "Packages — Laser Courses", "Packages — Body & Contouring", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
 
 const ADMIN_PASSWORD = "TBL@2025";
+const VIEW_PASSCODE = "TBL@2026";
 const PINK = "#f3c2d7";
 const VAT_RATE = 0.075;
 const fmt = n => "₦" + Math.max(0, Number(n)).toLocaleString("en-NG", { minimumFractionDigits: 2 });
@@ -304,6 +308,10 @@ function App() {
   const [openCat, setOpenCat] = useState(null);
   const [activeTab, setActiveTab] = useState("select");
   const [discounts, setDiscounts] = useState([{ id: 1, value: "", type: "naira" }]);
+  const [autoMode, setAutoMode] = useState(true);
+  const [pageUnlocked, setPageUnlocked] = useState(false);
+  const [gateInput, setGateInput] = useState("");
+  const [gateErr, setGateErr] = useState(false);
   const [suppressConsult, setSuppressConsult] = useState(false);
   const [showBackTop, setShowBackTop] = useState(false);
   // Admin
@@ -420,9 +428,8 @@ function App() {
 
   const subtotal = selItems.reduce((s, { service, qty }) => s + service.price * qty, 0);
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
-  const hasAutoDiscount = selItems.some(({ service }) => service.autoDiscount);
-  const consultDisc = (!suppressConsult && hasNonConsult)
-    ? selItems.reduce((s, { service, qty }) => s + (service.autoDiscount || 0) * qty, 0) : 0;
+  const hasAutoDiscount = false;
+  const consultDisc = 0;
   const manualDisc = discounts.reduce((s, d) => {
     const v = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
     return s + (d.type === "percent" ? Math.round((v / 100) * subtotal) : v);
@@ -432,19 +439,26 @@ function App() {
   const vat = Math.round(discountedSubtotal * VAT_RATE);
   const finalTotal = discountedSubtotal + vat;
 
-  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); };
-  const addDiscount = () => setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]);
-  const removeDiscount = id => setDiscounts(p => p.filter(d => d.id !== id));
-  const updateDiscount = (id, f, v) => setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d));
+  useEffect(() => {
+    if (!autoMode || !services) return;
+    const keys = Object.keys(selected).filter(k => selected[k]);
+    if (!keys.length) { setDiscounts([{ id: 1, value: "", type: "naira" }]); return; }
+    const hasPkg = keys.some(k => PKG_CATS.has(k.split("|||")[0]));
+    setDiscounts([{ id: 1, value: hasPkg ? "12" : "5000", type: hasPkg ? "percent" : "naira" }]);
+  }, [selected, autoMode, services]);
+  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); setAutoMode(true); };
+  const addDiscount = () => { setAutoMode(false); setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]); };
+  const removeDiscount = id => { setAutoMode(false); setDiscounts(p => p.filter(d => d.id !== id)); };
+  const updateDiscount = (id, f, v) => { setAutoMode(false); setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d)); };
 
   const filteredSvcs = useMemo(() => {
     if (!services || !search.trim()) return null;
     const q = search.toLowerCase();
     const res = [];
-    Object.entries(services).filter(([cat]) => isAdmin || !STAFF_ONLY.has(cat)).forEach(([cat, items]) =>
+    Object.entries(services).forEach(([cat, items]) =>
       items.forEach((s, idx) => s.name.toLowerCase().includes(q) && res.push({ cat, idx, service: s })));
     return res;
-  }, [search, services, isAdmin]);
+  }, [search, services]);
 
   // Admin
   const handleLock = () => {
@@ -599,6 +613,18 @@ function App() {
   const modalBg = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
   const modalBox = { background: "#111", border: "1px solid rgba(243,194,215,0.25)", borderRadius: 16, padding: 28, width: "100%", maxWidth: 500, maxHeight: "85vh", overflowY: "auto" };
 
+  if (!pageUnlocked) return (
+    <div style={{ minHeight: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Poppins, sans-serif" }}>
+      <div style={{ textAlign: "center", maxWidth: 320, width: "100%", padding: 24 }}>
+        <div style={{ fontFamily: "'Sacramento', cursive", fontSize: 42, color: PINK, marginBottom: 4 }}>The Baddie Lab</div>
+        <div style={{ color: "#888", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", marginBottom: 26 }}>Staff Price Calculator</div>
+        <input type="password" autoFocus value={gateInput} onChange={e => { setGateInput(e.target.value); setGateErr(false); }} onKeyDown={e => { if (e.key === "Enter") { if (gateInput === VIEW_PASSCODE) setPageUnlocked(true); else setGateErr(true); } }} placeholder="Enter passcode" style={{ width: "100%", padding: "13px 14px", background: "#111", border: "1px solid " + (gateErr ? "#c0392b" : "#2a2a2a"), borderRadius: 10, color: "#fff", fontSize: 15, textAlign: "center", fontFamily: "inherit", boxSizing: "border-box" }} />
+        {gateErr && <div style={{ color: "#c0392b", fontSize: 12, marginTop: 8 }}>Incorrect passcode</div>}
+        <button onClick={() => { if (gateInput === VIEW_PASSCODE) setPageUnlocked(true); else setGateErr(true); }} style={{ marginTop: 14, width: "100%", padding: 13, background: PINK, border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Enter</button>
+        <div style={{ color: "#555", fontSize: 11, marginTop: 18 }}>Internal use only · not for clients</div>
+      </div>
+    </div>
+  );
   if (!services) return (
     <div style={{ fontFamily: "'Poppins',sans-serif", minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
       <style>{"@keyframes spin{to{transform:rotate(360deg)}}"}</style>
@@ -803,13 +829,13 @@ function App() {
             </div>
           )}
 
-          {!filteredSvcs && Object.entries(services).filter(([cat]) => isAdmin || !STAFF_ONLY.has(cat)).map(([cat, items]) => {
+          {!filteredSvcs && Object.entries(services).map(([cat, items]) => {
             const isOpen = openCat === cat, catSel = items.filter((_, i) => selected[`${cat}|||${i}`]).length;
             return (
               <div key={cat} style={{ marginBottom: 7, border: "1px solid #222", borderRadius: 10, overflow: "hidden" }}>
                 <div className="ch" onClick={() => toggleCat(cat)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", cursor: "pointer", background: isOpen ? "rgba(243,194,215,0.06)" : "#111" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 13, color: catSel > 0 ? PINK : "#ccc" }}>{cat}</span>
+                    <span style={{ fontSize: 13, color: catSel > 0 ? PINK : "#ccc" }}>{cat}</span>{PKG_CATS.has(cat) && <span style={{ marginLeft: 8, background: "rgba(243,194,215,0.18)", color: PINK, borderRadius: 10, padding: "1px 8px", fontSize: 9, fontWeight: 700 }}>PACKAGE</span>}
                     {catSel > 0 && <span style={{ background: PINK, color: "#000", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{catSel}</span>}
                   </div>
                   <span style={{ color: "#555", fontSize: 17, display: "inline-block", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>⌄</span>
@@ -826,7 +852,7 @@ function App() {
                             </div>
                             <div>
                               <span style={{ fontSize: 13, color: isSel ? "#fff" : "#888" }}>{svc.name}</span>
-                              {svc.autoDiscount && <div style={{ fontSize: 10, color: "#7a9e7a", marginTop: 1 }}>₦5,000 discount with other services</div>}
+                              {false}
                             </div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
@@ -960,8 +986,8 @@ function App() {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Discounts</div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-                    {[{ lbl: "₦5,000 single (same-day)", v: "5000", t: "naira" }, { lbl: "12% package (today)", v: "12", t: "percent" }, { lbl: "6% package (later)", v: "6", t: "percent" }].map(p => (
-                      <button key={p.lbl} onClick={() => { setDiscounts([{ id: Date.now(), value: p.v, type: p.t }]); setSuppressConsult(true); }} style={{ ...b, flex: "1 1 auto", padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(243,194,215,0.4)", background: "rgba(243,194,215,0.07)", color: PINK, fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{p.lbl}</button>
+                    {[{ lbl: "Single same-day (₦5,000)", v: "5000", t: "naira" }, { lbl: "Consultation only (12%)", v: "12", t: "percent" }, { lbl: "Returning client (6%)", v: "6", t: "percent" }].map(p => (
+                      <button key={p.lbl} onClick={() => { setAutoMode(false); setDiscounts([{ id: Date.now(), value: p.v, type: p.t }]); }} style={{ ...b, flex: "1 1 auto", padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(243,194,215,0.4)", background: "rgba(243,194,215,0.07)", color: PINK, fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{p.lbl}</button>
                     ))}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

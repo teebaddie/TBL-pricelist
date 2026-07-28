@@ -234,6 +234,9 @@ const DEFAULT_SERVICES = {
 };
 
 const PKG_CATS = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Hair Restoration", "Packages — Intimate", "Packages — Laser Courses", "Packages — Body & Contouring", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
+const WL_CATS = new Set(["Weight-Loss Programs (GLP-1)", "Appetite Kickstart"]);
+const INTRO_CATS = new Set(["Facials (Intro Pricing)", "Massage (Intro Pricing)", "Laser - Women (Intro)", "Laser - Women (Standard)", "Laser - Men (Intro)", "Laser - Men (Standard)"]);
+const DISCOUNT_FLOOR = 20000;
 
 const ADMIN_PASSWORD = "TBL@2025";
 const VIEW_PASSCODE = "TBL@2026";
@@ -309,6 +312,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("select");
   const [discounts, setDiscounts] = useState([{ id: 1, value: "", type: "naira" }]);
   const [autoMode, setAutoMode] = useState(true);
+  const [discountDay, setDiscountDay] = useState("today");
   const [pageUnlocked, setPageUnlocked] = useState(false);
   const [gateInput, setGateInput] = useState("");
   const [gateErr, setGateErr] = useState(false);
@@ -413,6 +417,7 @@ function App() {
     const q = n[key].qty + d;
     if (q <= 0) delete n[key]; else n[key] = { ...n[key], qty: q }; return n;
   });
+  const removeItem = key => setSelected(p => { const n = { ...p }; delete n[key]; return n; });
   // Per-unit counter: starts at the minimum, +/- steps by one unit, never drops below the minimum.
   const stepUnits = (key, delta, min) => setSelected(p => {
     const n = { ...p }; if (!n[key]) return n;
@@ -429,7 +434,35 @@ function App() {
   const subtotal = selItems.reduce((s, { service, qty }) => s + service.price * qty, 0);
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
   const hasAutoDiscount = false;
-  const consultDisc = 0;
+  // ── Auto discount engine ──────────────────────────────────────────────
+  // Package bundles get a flat rate. À-la-carte services are tiered by how
+  // many discountable units (sessions) are in the cart. Anything priced
+  // ₦20,000 or below is never discounted and never counted toward the tier.
+  // Intro-pricing (pre-Aug-1) items are excluded entirely. "Today" =
+  // booked at consultation (higher rate); "Later" = returning/follow-up.
+  const disc = useMemo(() => {
+    if (!autoMode) return { amount: 0, pkgBase: 0, svcBase: 0, svcUnits: 0, pkgRate: 0, svcRate: 0, svcFlat: 0, pkgAmt: 0, svcAmt: 0 };
+    const today = discountDay === "today";
+    let pkgBase = 0, svcBase = 0, svcUnits = 0, hasConsult = false, hasOtherSvc = false;
+    selItems.forEach(({ cat, service, qty }) => {
+      if (service.isConsultation) { hasConsult = true; return; }
+      if (INTRO_CATS.has(cat)) return;
+      if (PKG_CATS.has(cat)) { pkgBase += service.price * qty; return; }
+      hasOtherSvc = true;
+      if (service.price <= DISCOUNT_FLOOR) return;
+      svcBase += service.price * qty; svcUnits += qty;
+    });
+    const pkgRate = pkgBase > 0 ? (today ? 12 : 6) : 0;
+    let svcRate = 0, svcFlat = 0;
+    if (svcUnits >= 12) svcRate = today ? 16 : 10;
+    else if (svcUnits >= 8) svcRate = today ? 14 : 8;
+    else if (svcUnits >= 4) svcRate = today ? 12 : 6;
+    else if (today && hasConsult && hasOtherSvc) svcFlat = 5000;
+    const pkgAmt = Math.round(pkgBase * pkgRate / 100);
+    const svcAmt = svcRate ? Math.round(svcBase * svcRate / 100) : svcFlat;
+    return { amount: pkgAmt + svcAmt, pkgBase, svcBase, svcUnits, pkgRate, svcRate, svcFlat, pkgAmt, svcAmt };
+  }, [selItems, autoMode, discountDay]);
+  const consultDisc = suppressConsult ? 0 : disc.amount;
   const manualDisc = discounts.reduce((s, d) => {
     const v = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
     return s + (d.type === "percent" ? Math.round((v / 100) * subtotal) : v);
@@ -439,17 +472,10 @@ function App() {
   const vat = Math.round(discountedSubtotal * VAT_RATE);
   const finalTotal = discountedSubtotal + vat;
 
-  useEffect(() => {
-    if (!autoMode || !services) return;
-    const keys = Object.keys(selected).filter(k => selected[k]);
-    if (!keys.length) { setDiscounts([{ id: 1, value: "", type: "naira" }]); return; }
-    const hasPkg = keys.some(k => PKG_CATS.has(k.split("|||")[0]));
-    setDiscounts([{ id: 1, value: hasPkg ? "12" : "5000", type: hasPkg ? "percent" : "naira" }]);
-  }, [selected, autoMode, services]);
-  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); setAutoMode(true); };
-  const addDiscount = () => { setAutoMode(false); setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]); };
-  const removeDiscount = id => { setAutoMode(false); setDiscounts(p => p.filter(d => d.id !== id)); };
-  const updateDiscount = (id, f, v) => { setAutoMode(false); setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d)); };
+  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); setAutoMode(true); setDiscountDay("today"); };
+  const addDiscount = () => setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]);
+  const removeDiscount = id => setDiscounts(p => p.filter(d => d.id !== id));
+  const updateDiscount = (id, f, v) => setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d));
 
   const filteredSvcs = useMemo(() => {
     if (!services || !search.trim()) return null;
@@ -923,22 +949,18 @@ function App() {
                         <button onClick={() => updateQty(key, 1)} style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#888", fontSize: 17 }}>+</button>
                       </div>
                     )}
-                    <div style={{ textAlign: "right", minWidth: 100, marginLeft: 12 }}>
+                    <div style={{ textAlign: "right", minWidth: 82, marginLeft: 12 }}>
                       <div style={{ fontSize: 13, color: PINK, fontWeight: 600 }}>{fmt(lineTotal)}</div>
                     </div>
+                    <button onClick={() => removeItem(key)} title="Remove" style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid rgba(255,80,80,0.25)", background: "rgba(255,80,80,0.06)", color: "#c55", fontSize: 15, marginLeft: 10, flexShrink: 0, cursor: "pointer" }}>✕</button>
                   </div>
                   );
                 })}
               </div>
 
-              {hasAutoDiscount && !hasNonConsult && (
-                <div style={{ background: "rgba(243,194,215,0.06)", border: "1px solid rgba(243,194,215,0.2)", borderRadius: 8, padding: "11px 14px", marginBottom: 14, fontSize: 12, color: PINK }}>
-                  The ₦5,000 discount applies only when other services are also booked.
-                </div>
-              )}
-              {suppressConsult && hasNonConsult && hasAutoDiscount && (
+              {suppressConsult && disc.amount > 0 && (
                 <div style={{ background: "rgba(243,194,215,0.04)", border: "1px solid rgba(243,194,215,0.15)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#666" }}>Consultation discount removed</span>
+                  <span style={{ fontSize: 12, color: "#666" }}>Auto discount removed</span>
                   <button onClick={() => setSuppressConsult(false)} style={{ ...b, fontSize: 11, color: PINK, background: "transparent", border: "1px solid rgba(243,194,215,0.3)", borderRadius: 6, padding: "3px 10px" }}>Restore</button>
                 </div>
               )}
@@ -953,11 +975,21 @@ function App() {
                   <div style={{ background: "rgba(90,138,90,0.1)", border: "1px solid rgba(90,138,90,0.25)", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
                     <div style={{ fontSize: 10, color: "#7a9e7a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Discounts Applied</div>
                     {consultDisc > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Consultation discount</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(consultDisc)}</span>
-                          <button onClick={() => setSuppressConsult(true)} style={{ ...b, width: 20, height: 20, borderRadius: "50%", border: "1px solid rgba(90,138,90,0.4)", background: "transparent", color: "#7a9e7a", fontSize: 13 }}>×</button>
+                      <div style={{ marginBottom: 6 }}>
+                        {disc.pkgAmt > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Package bundle · {disc.pkgRate}% ({discountDay === "today" ? "consultation" : "returning"})</span>
+                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(disc.pkgAmt)}</span>
+                          </div>
+                        )}
+                        {disc.svcAmt > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 {disc.svcRate ? `${disc.svcUnits} sessions · ${disc.svcRate}%` : "Single service + consultation"}</span>
+                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(disc.svcAmt)}</span>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                          <button onClick={() => setSuppressConsult(true)} style={{ ...b, fontSize: 10, color: "#7a9e7a", background: "transparent", border: "1px solid rgba(90,138,90,0.4)", borderRadius: 6, padding: "2px 8px" }}>Remove auto discount</button>
                         </div>
                       </div>
                     )}
@@ -984,12 +1016,19 @@ function App() {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Discounts</div>
-                  <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-                    {[{ lbl: "Single same-day (₦5,000)", v: "5000", t: "naira" }, { lbl: "Consultation only (12%)", v: "12", t: "percent" }, { lbl: "Returning client (6%)", v: "6", t: "percent" }].map(p => (
-                      <button key={p.lbl} onClick={() => { setAutoMode(false); setDiscounts([{ id: Date.now(), value: p.v, type: p.t }]); }} style={{ ...b, flex: "1 1 auto", padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(243,194,215,0.4)", background: "rgba(243,194,215,0.07)", color: PINK, fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{p.lbl}</button>
-                    ))}
+                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Auto Discount</div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 20, padding: 3, border: "1px solid #2a2a2a" }}>
+                      {[{ v: "today", l: "Today (consultation)" }, { v: "later", l: "Later (returning)" }].map(o => (
+                        <button key={o.v} onClick={() => { setAutoMode(true); setSuppressConsult(false); setDiscountDay(o.v); }} style={{ ...b, padding: "5px 12px", borderRadius: 16, border: "none", fontSize: 11, fontWeight: 600, background: (autoMode && discountDay === o.v) ? PINK : "transparent", color: (autoMode && discountDay === o.v) ? "#000" : "#777" }}>{o.l}</button>
+                      ))}
+                    </div>
+                    <button onClick={() => { setAutoMode(a => !a); setSuppressConsult(false); }} style={{ ...b, padding: "5px 12px", borderRadius: 16, border: "1px solid " + (autoMode ? "rgba(90,138,90,0.5)" : "#333"), background: "transparent", color: autoMode ? "#8aba8a" : "#666", fontSize: 11, fontWeight: 600 }}>{autoMode ? "Auto ON" : "Auto OFF"}</button>
                   </div>
+                  <div style={{ fontSize: 10, color: "#555", lineHeight: 1.5, marginBottom: 14 }}>
+                    Bundles {discountDay === "today" ? "12%" : "6%"} · 4–7 sessions {discountDay === "today" ? "12%" : "6%"} · 8–11 {discountDay === "today" ? "14%" : "8%"} · 12+ {discountDay === "today" ? "16%" : "10%"}{discountDay === "today" ? " · single service + consultation ₦5,000" : ""}. Services ≤₦20,000 excluded.
+                  </div>
+                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Adjustments</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {discounts.map(d => {
                       const raw = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
@@ -1027,6 +1066,22 @@ function App() {
                     {totalDisc > 0 && <div style={{ fontSize: 11, color: "#7a9e7a", marginTop: 2 }}>Saved {fmt(totalDisc)}</div>}
                   </div>
                   <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, color: PINK, fontWeight: 700 }}>{fmt(finalTotal)}</div>
+                </div>
+              </div>
+
+              <div style={{ background: "#0d0d0d", borderRadius: 12, border: "1px solid rgba(243,194,215,0.18)", padding: 18, marginTop: 14 }}>
+                <div style={{ fontSize: 11, color: PINK, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12, fontWeight: 600 }}>Discount Rules · Front Desk Reference</div>
+                <div style={{ fontSize: 12.5, color: "#bbb", lineHeight: 1.75 }}>
+                  <div style={{ marginBottom: 8 }}><strong style={{ color: "#ddd" }}>How to count:</strong> add up every session / unit in the cart (a 4-session course counts as 4). Any single service priced <strong>₦20,000 or below is never discounted</strong> and does not count.</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>1–3 sessions <span style={{ color: "#777" }}>(with a consultation in the cart)</span></span><span style={{ color: "#8aba8a", fontWeight: 600 }}>₦5,000 off</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>4–7 sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>8–11 sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>14% today · 8% later</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>12+ sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>16% today · 10% later</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>Package bundles &amp; weight-loss programs</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later</span></div>
+                  <div style={{ marginTop: 8, color: "#888" }}><strong style={{ color: "#aaa" }}>Today</strong> = booked at the consultation visit. <strong style={{ color: "#aaa" }}>Later</strong> = returning / follow-up. Use the Today/Later toggle above. Pre-Aug-1 intro items get no discount.</div>
+                  <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(243,194,215,0.05)", border: "1px solid rgba(243,194,215,0.15)", borderRadius: 8, color: "#ccc" }}>
+                    <strong style={{ color: PINK }}>Example:</strong> Client at consultation buys 4 laser sessions at ₦50,000 = ₦200,000. Today → 12% = ₦24,000 off. ₦176,000 + 7.5% VAT (₦13,200) = <strong style={{ color: "#fff" }}>₦189,200</strong>.
+                  </div>
                 </div>
               </div>
             </>

@@ -92,7 +92,7 @@ const DEFAULT_SERVICES = {
     { name: "NAD+ IM Injection", price: 85000 }, { name: "NAD+ SUBQ Injection", price: 45000 },
   ],
   "Weight Loss Programs": [
-    { name: "Duromine 30mg (Phentermine Program)", price: 400000 }, { name: "Phentermine 37.5mg", price: 490000 },
+    { name: "Duromine 30mg (Phentermine Program)", price: 250000 }, { name: "Phentermine 37.5mg", price: 490000 },
     { name: "Ozempic 0.5mg", price: 600000 }, { name: "Ozempic 1mg", price: 675000 },
     { name: "The Kim-K Shot (Semaglutide)", price: 130000 }, { name: "Liquid Lipo Plan (4 injections + B12)", price: 170000 },
     { name: "Injection of Outside Injectables (IM only)", price: 20000 }, { name: "Mounjaro 2.5mg", price: 750000 },
@@ -223,10 +223,10 @@ const DEFAULT_SERVICES = {
     { name: "VIP 5", price: 475000 }, { name: "VIP 10", price: 950000 },
   ],
   "Appetite Kickstart": [
-    { name: "Appetite Kickstart — Snack Size", price: 650000 },
+    { name: "Appetite Kickstart — Snack Size", price: 500000 },
   ],
   "GLP-1 Program Add-Ons": [
-    { name: "NAD Sub-Q", price: 45000 }, { name: "NAD IM", price: 85000 }, { name: "Biotin", price: 30000 },
+    { name: "NAD Sub-Q", price: 45000 }, { name: "NAD IM", price: 85000 }, { name: "Biotin", price: 30000 }, { name: "Liquid Lipo", price: 45000 },
   ],
 };
 
@@ -239,8 +239,107 @@ Object.assign(DESCRIPTIONS, {"Facials (Regular Pricing)|||Microdermabrasion Faci
 Object.assign(DESCRIPTIONS, {"Laser (Standard)|||Décolletage (Small)":"Laser hair removal, décolletage (small) — 1 session","Laser (Standard)|||Décolletage (Full)":"Laser hair removal, décolletage (full) — 1 session","Laser (Standard)|||Underarms":"Laser hair removal, underarms — 1 session","Laser (Standard)|||Half Arms":"Laser hair removal, half arms — 1 session","Laser (Standard)|||Full Arms":"Laser hair removal, full arms — 1 session","Laser (Standard)|||Knuckles / Fingers":"Laser hair removal, knuckles / fingers — 1 session","Laser (Standard)|||Chest":"Laser hair removal, chest — 1 session","Laser (Standard)|||Abdomen":"Laser hair removal, abdomen — 1 session","Laser (Standard)|||Tummy Trail":"Laser hair removal, tummy trail — 1 session","Laser (Standard)|||Full Back":"Laser hair removal, full back — 1 session","Laser (Standard)|||Back + Shoulders":"Laser hair removal, back + shoulders — 1 session","Laser (Standard)|||Half Legs":"Laser hair removal, half legs — 1 session","Laser (Standard)|||Half Legs (Thighs)":"Laser hair removal, half legs (thighs) — 1 session","Laser (Standard)|||Full Legs":"Laser hair removal, full legs — 1 session","Laser (Standard)|||Bikini Line":"Laser hair removal, bikini line — 1 session","Laser (Standard)|||Brazilian (Full)":"Laser hair removal, brazilian (full) — 1 session","Laser (Standard)|||Hollywood (Full Intimate)":"Laser hair removal, hollywood (full intimate) — 1 session","Laser (Standard)|||Buttocks / Perianal":"Laser hair removal, buttocks / perianal — 1 session","Laser (Standard)|||Half Body":"Laser hair removal, half body — 1 session","Laser (Standard)|||Full Body":"Laser hair removal, full body — 1 session","Laser (Men's Pricing)|||Upper Lip":"Laser hair removal (men’s), upper lip — 1 session","Laser (Men's Pricing)|||Chin":"Laser hair removal (men’s), chin — 1 session","Laser (Men's Pricing)|||Chin + Upper Lip":"Laser hair removal (men’s), chin + upper lip — 1 session","Laser (Men's Pricing)|||Cheeks":"Laser hair removal (men’s), cheeks — 1 session","Laser (Men's Pricing)|||Sideburns":"Laser hair removal (men’s), sideburns — 1 session","Laser (Men's Pricing)|||Neck (Front)":"Laser hair removal (men’s), neck (front) — 1 session","Laser (Men's Pricing)|||Half Face":"Laser hair removal (men’s), half face — 1 session","Laser (Men's Pricing)|||Full Face":"Laser hair removal (men’s), full face — 1 session","Laser (Men's Pricing)|||Beard / Jawline":"Laser hair removal (men’s), beard / jawline — 1 session","Laser (Men's Pricing)|||Chest":"Laser hair removal (men’s), chest — 1 session","Laser (Men's Pricing)|||Half Legs":"Laser hair removal (men’s), half legs — 1 session","Laser (Men's Pricing)|||Half Legs (Thighs)":"Laser hair removal (men’s), half legs (thighs) — 1 session","Laser (Men's Pricing)|||Full Legs":"Laser hair removal (men’s), full legs — 1 session","Laser (Men's Pricing)|||Full Back":"Laser hair removal (men’s), full back — 1 session","Laser (Men's Pricing)|||Back + Shoulders":"Laser hair removal (men’s), back + shoulders — 1 session","Laser (Men's Pricing)|||Abdomen":"Laser hair removal (men’s), abdomen — 1 session","Laser (Men's Pricing)|||Full Body":"Laser hair removal (men’s), full body — 1 session"});
 Object.assign(DESCRIPTIONS, {"Laser (Men's Pricing)|||Head":"Laser hair removal (men’s), head — 1 session","Laser — Add-On|||Excessive Shaving Prep":"Extra shaving/prep fee for very dense hair — per session","Packages — Glow & Brightening|||Glass Skin SZN":"Glass Skin IV drip + Glass Act skin booster + Vitamin C facial — bundle","Packages — Glow & Brightening|||Paparazzi Ready":"Glass Skin IV drip + brightening facial + dermaplaning + LED — bundle","Packages — Glow & Brightening|||Thirst Trap Hydration":"Thirst-Trap hydra-facial + Glass Skin IV drip + LED — bundle","Packages — Acne & Peels|||Clear Skin SZN":"Acne facial + The Big Peel (TCA) + LED — bundle","Packages — Acne & Peels|||Back Baddie":"Back-acne facial + full-back laser + LED — bundle","Packages — Anti-Aging|||Snatched & Tight":"Poker Face microneedling + Snap Back RF + LED — bundle","Packages — Anti-Aging|||The Twilight (Vampire)":"Baddie Blood facial (microneedling + PRP) + Glass Act booster — bundle","Packages — Anti-Aging|||Main Character Energy (VIP)":"The Upgrade (microneedling + exosomes) + Glass Act booster + Snap Back RF — bundle","Packages — Anti-Aging|||Wide Awake Glow":"PRP under-eye treatment + brightening facial — bundle","Packages — Intimate|||Cookie Reload":"Cookie facial + Cookie Reset vaginal rejuvenation + Brazilian laser — bundle","Advanced Facials & Boosters|||Glass Act skin booster":"Injectable skin booster (micro-droplet HA/PDRN) for deep hydration & glow — 1 session","Advanced Facials & Boosters|||Poker Face microneedling":"Microneedling for collagen induction, pores & texture — 1 session","Advanced Facials & Boosters|||The Upgrade (MN + Exosomes)":"Microneedling with exosome serum for repair & glow — 1 session","Advanced Facials & Boosters|||Baddie Blood Facial (MN + PRP)":"Vampire facial: microneedling with your own PRP — 1 session","Advanced Facials & Boosters|||Peel Good (superficial peel)":"Superficial chemical peel (light AHA/BHA) for brightening & texture — 1 session","Advanced Facials & Boosters|||The Big Peel (TCA)":"Medium-depth TCA chemical peel for pigment, texture & scarring — 1 session","Hair Restoration|||Hair Force One (PRP hair)":"PRP scalp injections to stimulate hair growth — 1 session","Weight-Loss Programs (GLP-1)|||Tirzepatide 2.5–5mg — 1 month":"Tirzepatide (GLP-1/GIP) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 2.5–5mg — 2 months":"Tirzepatide (GLP-1/GIP) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 2.5–5mg — 3 months":"Tirzepatide (GLP-1/GIP) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 5–10mg — 1 month":"Tirzepatide (GLP-1/GIP) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 5–10mg — 2 months":"Tirzepatide (GLP-1/GIP) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 5–10mg — 3 months":"Tirzepatide (GLP-1/GIP) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 3-month program"});
 Object.assign(DESCRIPTIONS, {"Weight-Loss Programs (GLP-1)|||Tirzepatide 10–15mg — 1 month":"Tirzepatide (GLP-1/GIP) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 10–15mg — 2 months":"Tirzepatide (GLP-1/GIP) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Tirzepatide 10–15mg — 3 months":"Tirzepatide (GLP-1/GIP) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 2.5–5mg — 1 month":"Tirzepatide (Mounjaro) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 2.5–5mg — 2 months":"Tirzepatide (Mounjaro) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 2.5–5mg — 3 months":"Tirzepatide (Mounjaro) 2.5–5mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 5–10mg — 1 month":"Tirzepatide (Mounjaro) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 5–10mg — 2 months":"Tirzepatide (Mounjaro) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 5–10mg — 3 months":"Tirzepatide (Mounjaro) 5–10mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 10–15mg — 1 month":"Tirzepatide (Mounjaro) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 10–15mg — 2 months":"Tirzepatide (Mounjaro) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Mounjaro 10–15mg — 3 months":"Tirzepatide (Mounjaro) 10–15mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Ozempic 0.5mg — 1 month":"Semaglutide (Ozempic) 0.5mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Ozempic 0.5mg — 2 months":"Semaglutide (Ozempic) 0.5mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Ozempic 0.5mg — 3 months":"Semaglutide (Ozempic) 0.5mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Ozempic 1mg — 1 month":"Semaglutide (Ozempic) 1mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Ozempic 1mg — 2 months":"Semaglutide (Ozempic) 1mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Ozempic 1mg — 3 months":"Semaglutide (Ozempic) 1mg weekly + 2 IV drips + 4× B12 monthly — 3-month program","Weight-Loss Programs (GLP-1)|||Semaglutide (Kim-K) 0.25–0.5mg — 1 month":"Compounded semaglutide 0.25–0.5mg weekly + 2 IV drips + 4× B12 monthly — 1-month program","Weight-Loss Programs (GLP-1)|||Semaglutide (Kim-K) 0.25–0.5mg — 2 months":"Compounded semaglutide 0.25–0.5mg weekly + 2 IV drips + 4× B12 monthly — 2-month program","Weight-Loss Programs (GLP-1)|||Semaglutide (Kim-K) 0.25–0.5mg — 3 months":"Compounded semaglutide 0.25–0.5mg weekly + 2 IV drips + 4× B12 monthly — 3-month program"});
-Object.assign(DESCRIPTIONS, {"VIP Drip Club|||VIP 5":"5 signature IV drips + free VIP room each visit — 5-drip package","VIP Drip Club|||VIP 10":"10 signature IV drips + free VIP room each visit — 10-drip package","Appetite Kickstart|||Appetite Kickstart — Snack Size":"Non-GLP-1 kickstart: Duromine + 2 energy drips + 4× B12 — 1-month program","GLP-1 Program Add-Ons|||NAD Sub-Q":"NAD+ subcutaneous shot add-on — 1 shot (often 2×/month)","GLP-1 Program Add-Ons|||NAD IM":"NAD+ intramuscular shot add-on — 1 shot (often 2×/month)","GLP-1 Program Add-Ons|||Biotin":"Biotin hair/skin/nails shot add-on — 1 shot"});
+Object.assign(DESCRIPTIONS, {"VIP Drip Club|||VIP 5":"5 signature IV drips + free VIP room each visit — 5-drip package","VIP Drip Club|||VIP 10":"10 signature IV drips + free VIP room each visit — 10-drip package","Appetite Kickstart|||Appetite Kickstart — Snack Size":"Non-GLP-1 kickstart: Duromine + 2 energy drips + 4× B12 — 1-month program","GLP-1 Program Add-Ons|||NAD Sub-Q":"NAD+ subcutaneous shot add-on — 1 shot (often 2×/month)","GLP-1 Program Add-Ons|||NAD IM":"NAD+ intramuscular shot add-on — 1 shot (often 2×/month)","GLP-1 Program Add-Ons|||Biotin":"Biotin hair/skin/nails shot add-on — 1 shot","GLP-1 Program Add-Ons|||Liquid Lipo":"Lipotropic (MIC) fat-burn shot add-on — 1 shot"});
 // end DESCRIPTIONS
+// Cross-sell / bundle suggestions, keyed by category. Each: {s: what to add, why: the pitch, n: recommended sessions}.
+const WL_BUNDLE = [
+  { s: "Dermal Fillers (cheeks / tear troughs / nasolabial)", why: "Rapid GLP-1 weight loss deflates the mid-face and under-eyes (“Ozempic face”) — filler restores that lost volume so they look slimmer, not gaunt or aged.", n: "1 session now, review at 6 months" },
+  { s: "Glass Act skin booster", why: "Losing facial fat dulls and slackens the skin; the booster rebuilds hydration, bounce and glow.", n: "3 sessions" },
+  { s: "Snatched & Tight (RF skin tightening)", why: "Tightens the mild facial laxity that follows fast weight loss — before it sets in.", n: "3–6 sessions" },
+  { s: "Baddie Sculpting + Sauna", why: "Firms loose skin and clears residual fat on the body as they lean out.", n: "6–10 sessions" },
+  { s: "Botox (upper face)", why: "Once supporting fat is gone, dynamic lines show more — Botox keeps the face smooth.", n: "1 session, repeat every 3–4 months" },
+  { s: "NAD+ or VIP Drip Club", why: "Energy, focus and cellular support while eating in a calorie deficit.", n: "biweekly series / VIP 5" },
+];
+const BUNDLES = {
+  "Weight-Loss Programs (GLP-1)": WL_BUNDLE,
+  "Weight Loss Programs": WL_BUNDLE,
+  "Appetite Kickstart": WL_BUNDLE,
+  "Botox – Anti-Aging": [
+    { s: "Dermal Fillers", why: "Botox relaxes movement, filler restores volume — together they give complete, balanced rejuvenation (the gold-standard “tox + filler” combo).", n: "1 filler session" },
+    { s: "Glass Act skin booster or a facial", why: "Botox smooths lines but not skin texture or glow — a booster or facial finishes the surface.", n: "3 boosters / 4–6 facials" },
+    { s: "Rebook Botox", why: "Botox fades at 3–4 months; pre-booking keeps results consistent.", n: "every 3–4 months" },
+  ],
+  "Botox – Facial Contouring": [
+    { s: "Dermal Fillers (chin / jaw)", why: "Pair jaw-slimming or contouring Botox with filler to truly sculpt and define the lower face.", n: "1 session" },
+    { s: "Glass Act skin booster", why: "Adds skin glow to the sharper new contour.", n: "3 sessions" },
+  ],
+  "Fillers": [
+    { s: "Botox", why: "Balance the new volume with muscle-relaxing Botox so dynamic lines don’t fight the filler.", n: "1 session" },
+    { s: "Glass Act skin booster", why: "Surface hydration and glow to complement the structural volume.", n: "3 sessions" },
+    { s: "Lip Flip (with lip filler)", why: "Enhances the pout for a fuller finish.", n: "1 session" },
+  ],
+  "Laser (Standard)": [
+    { s: "Complete the 6–8 session course", why: "Laser only gives permanent reduction over a full course — a single session just slows regrowth. This is the #1 thing to book.", n: "6–8 sessions" },
+    { s: "Bundle adjacent areas", why: "Chin pairs with upper lip + sideburns (full lower face); underarms with Brazilian + legs — combining areas also unlocks the multi-service discount.", n: "6–8 per area" },
+    { s: "Excessive Shaving Prep (add-on)", why: "For dense hair, prep keeps the session on time and effective.", n: "per session" },
+  ],
+  "Laser (Men's Pricing)": [
+    { s: "Complete the 6–8 session course", why: "Laser needs a full course for permanent reduction; one session only slows regrowth.", n: "6–8 sessions" },
+    { s: "Bundle areas (beard + neck + chest / back)", why: "Grouping areas gives a complete result and unlocks the multi-service discount.", n: "6–8 per area" },
+    { s: "Excessive Shaving Prep (add-on)", why: "Dense coarse hair benefits from proper prep.", n: "per session" },
+  ],
+  "Facials (Regular Pricing)": [
+    { s: "Book a course of 4–6", why: "One facial maintains; a series is what actually transforms tone and texture.", n: "4–6 sessions" },
+    { s: "Dermaplaning + LED add-ons", why: "Boost each facial’s exfoliation and glow.", n: "add to each" },
+    { s: "Peel Good / The Big Peel", why: "For pigmentation, scarring or dullness a peel course goes deeper than a facial.", n: "3–6 sessions" },
+  ],
+  "Advanced Facials & Boosters": [
+    { s: "Book the full course (3–6)", why: "Microneedling, peels, PRP and exosomes build collagen cumulatively — one session won’t remodel the skin.", n: "3–6 sessions" },
+    { s: "Glass Act skin booster between sessions", why: "Keeps skin hydrated and primed for faster results.", n: "3 sessions" },
+    { s: "LED / soothing facial after", why: "Speeds healing and calms redness post-treatment.", n: "after each" },
+  ],
+  "Hair Restoration": [
+    { s: "Course of 3–6 monthly, then maintenance", why: "PRP needs repeated sessions to wake dormant follicles; results build over months.", n: "3–6 monthly, then every 3–6 months" },
+    { s: "Biotin shots", why: "Support hair growth from within alongside the injections.", n: "monthly" },
+  ],
+  "Fat Dissolve": [
+    { s: "2–4 sessions per area", why: "Fat dissolving is progressive — most areas need repeat treatments 4–6 weeks apart.", n: "2–4 per area" },
+    { s: "Baddie Sculpting + Sauna", why: "Boosts lymphatic drainage so dissolved fat clears faster and skin firms.", n: "series" },
+  ],
+  "Fat Dissolve (Lemon Bottle)": [
+    { s: "2–4 sessions per area", why: "Lemon Bottle lipolysis works progressively; plan repeat sessions per area.", n: "2–4 per area" },
+    { s: "Baddie Sculpting + Sauna", why: "Aids drainage and firms the treated area.", n: "series" },
+  ],
+  "Liquid BBL": [
+    { s: "Baddie Sculpting + Sauna", why: "Contour the waist and flanks to frame the fuller shape.", n: "6–10 sessions" },
+    { s: "Top-up plan", why: "Filler is gradually metabolised — a maintenance top-up keeps the projection.", n: "review at 6–12 months" },
+  ],
+  "Body Sculpting & Sauna": [
+    { s: "Book a course of 6–10", why: "Body contouring is cumulative; results build over a series.", n: "6–10 sessions" },
+    { s: "Fat Dissolve for stubborn pockets", why: "Targets fat that won’t shift with sculpting alone.", n: "2–4 per area" },
+  ],
+  "NAD+ Treatment": [
+    { s: "Book a series / VIP Drip Club", why: "NAD works best as a course; VIP 5/10 makes a regimen cheaper per drip.", n: "weekly series / VIP 5–10" },
+    { s: "Add Glutathione or Vitamin C", why: "Layer brightening and antioxidant support onto the NAD base.", n: "per drip" },
+  ],
+  "IV Infusions": [
+    { s: "VIP Drip Club (5 or 10)", why: "Drips deliver best results as a regimen — the VIP packages save money per session.", n: "VIP 5 or 10" },
+    { s: "Glutathione add-on", why: "Adds skin brightening to any drip.", n: "per drip" },
+  ],
+  "Popular Infusions": [
+    { s: "VIP Drip Club (5 or 10)", why: "Signature drips are best as a regimen; VIP packages lower the per-drip cost.", n: "VIP 5 or 10" },
+  ],
+  "IM Injections": [
+    { s: "Book a monthly series", why: "Vitamin shots work best topped up regularly, not one-off.", n: "monthly" },
+    { s: "Pair with an IV drip", why: "Combine a targeted shot with a full IV for a bigger boost.", n: "per visit" },
+  ],
+  "Massage (Regular Pricing)": [
+    { s: "Add hand + foot & leg", why: "Round out a full-body session for complete relaxation.", n: "add-on" },
+    { s: "Pair with a treatment day", why: "Great recovery after sculpting or a long visit.", n: "as needed" },
+  ],
+  "Packages — Anti-Aging": [
+    { s: "Add Botox or Filler", why: "Amplify an anti-aging package with targeted tox or volume for a dramatic result.", n: "1 session" },
+  ],
+  "Packages — Glow & Brightening": [
+    { s: "Peel Good / The Big Peel", why: "Deepen the brightening with a peel course for stubborn pigmentation.", n: "3–6 sessions" },
+  ],
+  "Packages — Acne & Peels": [
+    { s: "Book the peel as a course", why: "Acne and pigmentation clear over a series, not one peel.", n: "3–6 sessions" },
+  ],
+  "Packages — Intimate": [
+    { s: "Brazilian laser course", why: "Pairs naturally with intimate rejuvenation for a complete result.", n: "6–8 sessions" },
+  ],
+};
 const PKG_CATS = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Intimate", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
 const WL_CATS = new Set(["Weight-Loss Programs (GLP-1)", "Appetite Kickstart"]);
 const INTRO_CATS = new Set([]);
@@ -476,6 +575,7 @@ function App() {
   }, [selItems, autoMode, discountDay]);
   const cartHasConsult = selItems.some(({ service }) => service && service.isConsultation);
   const effToday = discountDay === "today" && cartHasConsult;
+  const bundleSuggestCats = [...new Set(selItems.map(x => x.cat))].filter(c => BUNDLES[c]);
   // Category ordering: regular services (A–Z), then Packages, then Pre-Aug-1 intro pricing.
   const regCats = services ? Object.keys(services).filter(c => !PKG_CATS.has(c) && !INTRO_CATS.has(c)) : [];
   const pkgCats = services ? Object.keys(services).filter(c => PKG_CATS.has(c) && !INTRO_CATS.has(c)) : [];
@@ -903,6 +1003,7 @@ function App() {
                             <div>
                               <span style={{ fontSize: 13, color: isSel ? "#fff" : "#888" }}>{svc.name}</span>
                               {DESCRIPTIONS[cat + "|||" + svc.name] && <div style={{ fontSize: 10.5, color: "#777", marginTop: 3, lineHeight: 1.4, maxWidth: 470 }}>{DESCRIPTIONS[cat + "|||" + svc.name]}</div>}
+                              {isSel && BUNDLES[cat] && <div style={{ fontSize: 10.5, color: PINK, marginTop: 3, lineHeight: 1.4, maxWidth: 470 }}>💡 Bundle with {BUNDLES[cat][0].s} — see the bill for why & sessions</div>}
                             </div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
@@ -946,7 +1047,7 @@ function App() {
                   <span style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase" }}>Selected Services</span>
                   <button onClick={clearAll} style={{ ...b, fontSize: 11, color: "#c55", background: "rgba(255,80,80,0.08)", border: "1px solid rgba(255,80,80,0.2)", borderRadius: 6, padding: "4px 10px" }}>Clear All</button>
                 </div>
-                {selItems.map(({ key, service, qty }) => {
+                {selItems.map(({ key, cat, service, qty }) => {
                   const perUnit = !!service.perUnit;
                   const rate = perUnit ? service.unitPrice : service.price;
                   const lineTotal = rate * (parseInt(qty, 10) || 0);
@@ -954,6 +1055,7 @@ function App() {
                   <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}</div>
+                      {DESCRIPTIONS[cat + "|||" + service.name] && <div style={{ fontSize: 10.5, color: "#8a8a8a", marginTop: 2, lineHeight: 1.35 }}>{PKG_CATS.has(cat) ? "Includes: " : ""}{DESCRIPTIONS[cat + "|||" + service.name]}</div>}
                       <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>
                     </div>
                     {perUnit ? (
@@ -1111,6 +1213,24 @@ function App() {
                   <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 26, color: PINK, fontWeight: 700 }}>{fmt(finalTotal)}</div>
                 </div>
               </div>
+
+              {bundleSuggestCats.length > 0 && (
+                <div style={{ background: "linear-gradient(180deg, rgba(243,194,215,0.06), #0d0d0d)", borderRadius: 12, border: "1px solid rgba(243,194,215,0.28)", padding: 18, marginTop: 14 }}>
+                  <div style={{ fontSize: 12, color: PINK, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>💡 Suggested Bundles & Cross-Sells</div>
+                  <div style={{ fontSize: 10.5, color: "#888", marginBottom: 14 }}>Based on what's in the cart — use these to guide the client on what pairs well and how many sessions to book.</div>
+                  {bundleSuggestCats.map(c => (
+                    <div key={c} style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, color: "#ddd", fontWeight: 600, marginBottom: 7, borderBottom: "1px solid rgba(243,194,215,0.12)", paddingBottom: 5 }}>Because they're getting <span style={{ color: PINK }}>{c}</span></div>
+                      {BUNDLES[c].map((b, bi) => (
+                        <div key={bi} style={{ marginBottom: 9, paddingLeft: 4 }}>
+                          <div style={{ fontSize: 12.5, color: "#f0d8e4", fontWeight: 600 }}>→ {b.s} <span style={{ color: "#7a9e7a", fontWeight: 400 }}>· {b.n}</span></div>
+                          <div style={{ fontSize: 11, color: "#999", lineHeight: 1.5, marginTop: 2 }}>{b.why}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ background: "#0d0d0d", borderRadius: 12, border: "1px solid rgba(243,194,215,0.18)", padding: 18, marginTop: 14 }}>
                 <div style={{ fontSize: 11, color: PINK, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12, fontWeight: 600 }}>Discount Rules · Front Desk Reference</div>

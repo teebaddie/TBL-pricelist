@@ -31,7 +31,7 @@
   var _ml = document.createElement('link'); _ml.rel='manifest'; _ml.href=URL.createObjectURL(new Blob([JSON.stringify(_m)],{type:'application/json'})); document.head.appendChild(_ml);
   var _al = document.createElement('link'); _al.rel='apple-touch-icon'; _al.href=_icon; document.head.appendChild(_al);
   if ('serviceWorker' in navigator) {
-    var sw = "const C='tbl-v3';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k!==C).map(k=>caches.delete(k)));await clients.claim();})()));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(caches.open(C).then(ca=>ca.match(e.request).then(h=>{const n=fetch(e.request).then(r=>{ca.put(e.request,r.clone());return r;}).catch(()=>h);return h||n;})));});";
+    var sw = "const C='tbl-v5';self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k!==C).map(k=>caches.delete(k)));await clients.claim();})()));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;var q=e.request;var doc=q.mode==='navigate'||q.destination==='document';if(doc){e.respondWith(fetch(q).then(function(r){var c=r.clone();caches.open(C).then(function(ca){ca.put(q,c);});return r;}).catch(function(){return caches.match(q);}));}else{e.respondWith(caches.open(C).then(function(ca){return ca.match(q).then(function(h){var n=fetch(q).then(function(r){ca.put(q,r.clone());return r;}).catch(function(){return h;});return h||n;});}));}});";
     navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(function(){});
   }
 </script>
@@ -1291,7 +1291,7 @@ function App() {
                             {ai >= 0 && (
                               inCart
                                 ? <span style={{ flexShrink: 0, fontSize: 10.5, color: "#7a9e7a", fontWeight: 600, whiteSpace: "nowrap", padding: "5px 8px" }}>✓ In cart</span>
-                                : <button onClick={() => addSuggestion(b.add.cat, b.add.name, b.add.qty)} style={{ flexShrink: 0, fontSize: 11, color: "#8aba8a", background: "rgba(138,186,138,0.1)", border: "1px solid rgba(138,186,138,0.35)", borderRadius: 6, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600 }}>+ Add {b.add.qty}</button>
+                                : <button type="button" onClick={() => addSuggestion(b.add.cat, b.add.name, b.add.qty)} style={{ flexShrink: 0, fontSize: 12, color: "#8aba8a", background: "rgba(138,186,138,0.12)", border: "1px solid rgba(138,186,138,0.4)", borderRadius: 6, padding: "8px 14px", minHeight: 36, cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600, touchAction: "manipulation", WebkitTapHighlightColor: "rgba(138,186,138,0.4)" }}>+ Add {b.add.qty}</button>
                             )}
                           </div>
                         );

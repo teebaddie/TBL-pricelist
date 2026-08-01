@@ -421,13 +421,14 @@ function buildFromStored(stored) {
           } else {
             merged.price = Number(si.price) || 0;
           }
+          if (si.wasPrice != null) merged.wasPrice = Number(si.wasPrice);
           return merged;
         }
         if (si.perUnit) {
           const up = Number(si.unitPrice) || Number(si.price) || 0;
-          return { name: si.name, perUnit: true, unitPrice: up, minUnits: Number(si.minUnits) || 1, price: up };
+          return { name: si.name, perUnit: true, unitPrice: up, minUnits: Number(si.minUnits) || 1, price: up, ...(si.wasPrice != null ? { wasPrice: Number(si.wasPrice) } : {}) };
         }
-        return { name: si.name, price: Number(si.price) || 0 };
+        return si.wasPrice != null ? { name: si.name, price: Number(si.price) || 0, wasPrice: Number(si.wasPrice) } : { name: si.name, price: Number(si.price) || 0 };
       });
       // Merge in any new default items (price-list additions) not present in stored data
       defs.forEach(d => { if (!out[cat].some(x => x.name === d.name)) out[cat].push(clone(d)); });
@@ -601,11 +602,12 @@ function App() {
   // Intro-pricing (pre-Aug-1) items are excluded entirely. "Today" =
   // booked at consultation (higher rate); "Later" = returning/follow-up.
   const disc = useMemo(() => {
-    if (!autoMode) return { amount: 0, pkgBase: 0, expBase: 0, expUnits: 0, cheapBase: 0, cheapUnits: 0, pkgRate: 0, expRate: 0, cheapRate: 0, svcFlat: 0, pkgAmt: 0, svcAmt: 0, isToday: false };
+    if (!autoMode) return { amount: 0, pkgBase: 0, expBase: 0, expUnits: 0, cheapBase: 0, cheapUnits: 0, pkgRate: 0, expRate: 0, cheapRate: 0, svcFlat: 0, pkgAmt: 0, expAmt: 0, cheapAmt: 0, svcAmt: 0, isToday: false, discLabel: "" };
     let pkgBase = 0, expBase = 0, expUnits = 0, cheapBase = 0, cheapUnits = 0, hasConsult = false, hasOtherSvc = false;
     selItems.forEach(({ cat, service, qty }) => {
       if (service.isConsultation) { hasConsult = true; return; }
       if (INTRO_CATS.has(cat)) return;
+      if (service.wasPrice) return; // clearance items: price is the locked offer, no further discount
       if (PKG_CATS.has(cat)) { pkgBase += service.price * qty; return; }
       hasOtherSvc = true;
       if (service.price <= DISCOUNT_FLOOR) { cheapBase += service.price * qty; cheapUnits += qty; }
@@ -623,8 +625,17 @@ function App() {
     const totalUnits = expUnits + cheapUnits;
     if (!expRate && !cheapRate && today && hasConsult && hasOtherSvc && totalUnits >= 1 && totalUnits <= 3) svcFlat = 5000;
     const pkgAmt = Math.round(pkgBase * pkgRate / 100);
-    const svcAmt = Math.round(expBase * expRate / 100) + Math.round(cheapBase * cheapRate / 100) + svcFlat;
-    return { amount: pkgAmt + svcAmt, pkgBase, expBase, expUnits, cheapBase, cheapUnits, pkgRate, expRate, cheapRate, svcFlat, pkgAmt, svcAmt, isToday: today };
+    const expAmt = Math.round(expBase * expRate / 100);
+    const cheapAmt = Math.round(cheapBase * cheapRate / 100);
+    // Discounts do NOT stack — only the single biggest one applies to the cart.
+    const opts = [
+      { amt: pkgAmt, label: `Package bundle · ${pkgRate}% (${today ? "consultation" : "returning"})` },
+      { amt: expAmt, label: `${expUnits} session${expUnits !== 1 ? "s" : ""} · ${expRate}%` },
+      { amt: cheapAmt, label: `${cheapUnits} session${cheapUnits !== 1 ? "s" : ""} ≤₦20k · ${cheapRate}%` },
+      { amt: svcFlat, label: `Single service + consultation` },
+    ].filter(o => o.amt > 0);
+    const win = opts.reduce((a, b) => b.amt > a.amt ? b : a, { amt: 0, label: "" });
+    return { amount: win.amt, discLabel: win.label, pkgBase, expBase, expUnits, cheapBase, cheapUnits, pkgRate, expRate, cheapRate, svcFlat, pkgAmt, expAmt, cheapAmt, svcAmt: win.amt, isToday: today };
   }, [selItems, autoMode, discountDay]);
   const cartHasConsult = selItems.some(({ service }) => service && service.isConsultation);
   const effToday = discountDay === "today" && cartHasConsult;
@@ -779,7 +790,7 @@ function App() {
         if (item.perUnit) out.unitPrice = parseInt(String(item.unitPrice != null ? item.unitPrice : item.price).replace(/[^0-9]/g, ""), 10) || 0;
         return out;
       });
-      storage[cat] = final[cat].map(({ name, price }) => ({ name, price }));
+      storage[cat] = final[cat].map(({ name, price, wasPrice }) => wasPrice != null ? ({ name, price, wasPrice }) : ({ name, price }));
     });
     const payload = serialize(editData.catOrder, final);
 
@@ -1072,7 +1083,8 @@ function App() {
                               </>
                             ) : (
                               <>
-                                <div style={{ fontSize: 13, color: PINK }}>{fmt(svc.price)}</div>
+                                {svc.wasPrice && <div style={{ fontSize: 11, color: "#888", textDecoration: "line-through" }}>{fmt(svc.wasPrice)}</div>}
+                                <div style={{ fontSize: 13, color: PINK }}>{fmt(svc.price)}{svc.wasPrice && <span style={{ fontSize: 9, color: "#8aba8a", marginLeft: 5, letterSpacing: 0.5 }}>CLEARANCE</span>}</div>
                                 <div style={{ fontSize: 10, color: "#777" }}>{fmt(Math.round(svc.price * (1 + VAT_RATE)))} +VAT</div>
                               </>
                             )}
@@ -1114,7 +1126,7 @@ function App() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}</div>
                       {DESCRIPTIONS[cat + "|||" + service.name] && <div style={{ fontSize: 10.5, color: "#8a8a8a", marginTop: 2, lineHeight: 1.35 }}>{PKG_CATS.has(cat) ? "Includes: " : ""}{DESCRIPTIONS[cat + "|||" + service.name]}</div>}
-                      <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>
+                      <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{service.wasPrice && <span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.wasPrice)}</span>}{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>
                     </div>
                     {perUnit ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12 }}>
@@ -1161,28 +1173,10 @@ function App() {
                     <div style={{ fontSize: 10, color: "#7a9e7a", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Discounts Applied</div>
                     {consultDisc > 0 && (
                       <div style={{ marginBottom: 6 }}>
-                        {disc.pkgAmt > 0 && (
+                        {disc.amount > 0 && (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Package bundle · {disc.pkgRate}% ({disc.isToday ? "consultation" : "returning"})</span>
-                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(disc.pkgAmt)}</span>
-                          </div>
-                        )}
-                        {disc.expRate > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 {disc.expUnits} session{disc.expUnits !== 1 ? "s" : ""} · {disc.expRate}%</span>
-                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(Math.round(disc.expBase * disc.expRate / 100))}</span>
-                          </div>
-                        )}
-                        {disc.cheapRate > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 {disc.cheapUnits} session{disc.cheapUnits !== 1 ? "s" : ""} ≤₦20k · {disc.cheapRate}%</span>
-                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(Math.round(disc.cheapBase * disc.cheapRate / 100))}</span>
-                          </div>
-                        )}
-                        {disc.svcFlat > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Single service + consultation</span>
-                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(disc.svcFlat)}</span>
+                            <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 {disc.discLabel} <span style={{ fontSize: 9.5, color: "#5f7a5f" }}>· biggest discount, no stacking</span></span>
+                            <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(disc.amount)}</span>
                           </div>
                         )}
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>

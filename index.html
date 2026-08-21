@@ -382,7 +382,9 @@ const ITEM_BUNDLES = {
   ],
 };
 const PKG_CATS = new Set(["Packages — Glow & Brightening", "Packages — Acne & Peels", "Packages — Anti-Aging", "Packages — Intimate", "Weight-Loss Programs (GLP-1)", "VIP Drip Club", "Appetite Kickstart"]);
-const WL_CATS = new Set(["Weight-Loss Programs (GLP-1)", "Appetite Kickstart"]);
+// Any weight-loss item in the cart makes Vitamin B12 complimentary (₦0) — B12 is included free with every weight-loss plan.
+const WL_CATS = new Set(["Weight-Loss Programs (GLP-1)", "Weight Loss Programs", "Appetite Kickstart"]);
+const COMP_B12_NAME = "Vitamin B12";
 const NO_DISC_CATS = new Set(["Weight Loss Programs", "Weight-Loss Programs (GLP-1)"]);
 const INTRO_CATS = new Set([]);
 const DISCOUNT_FLOOR = 20000;
@@ -593,7 +595,11 @@ function App() {
       key, cat, qty, service: services[cat]?.[idx]
     })).filter(x => x.service), [selected, services]);
 
-  const subtotal = selItems.reduce((s, { service, qty }) => s + service.price * qty, 0);
+  // Vitamin B12 is complimentary (₦0) whenever any weight-loss item is in the cart — it's included free with weight-loss plans.
+  const cartHasWL = selItems.some(({ cat }) => WL_CATS.has(cat));
+  const isCompB12 = (service) => cartHasWL && !!service && service.name === COMP_B12_NAME;
+
+  const subtotal = selItems.reduce((s, { service, qty }) => s + (isCompB12(service) ? 0 : service.price) * qty, 0);
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
   const hasAutoDiscount = false;
   // ── Auto discount engine ──────────────────────────────────────────────
@@ -606,6 +612,7 @@ function App() {
     if (!autoMode) return { amount: 0, pkgBase: 0, expBase: 0, expUnits: 0, cheapBase: 0, cheapUnits: 0, pkgRate: 0, expRate: 0, cheapRate: 0, svcFlat: 0, pkgAmt: 0, expAmt: 0, cheapAmt: 0, svcAmt: 0, isToday: false, discLabel: "" };
     let pkgBase = 0, expBase = 0, expUnits = 0, cheapBase = 0, cheapUnits = 0, hasConsult = false, hasOtherSvc = false;
     selItems.forEach(({ cat, service, qty }) => {
+      if (isCompB12(service)) return; // complimentary B12 is ₦0 — never counts toward a discount tier
       if (service.isConsultation) { hasConsult = true; return; }
       if (INTRO_CATS.has(cat)) return;
       if (service.wasPrice) return; // clearance items: price is the locked offer, no further discount
@@ -1121,14 +1128,17 @@ function App() {
                 </div>
                 {selItems.map(({ key, cat, service, qty }) => {
                   const perUnit = !!service.perUnit;
-                  const rate = perUnit ? service.unitPrice : service.price;
+                  const comp = isCompB12(service);
+                  const rate = comp ? 0 : (perUnit ? service.unitPrice : service.price);
                   const lineTotal = rate * (parseInt(qty, 10) || 0);
                   return (
                   <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}</div>
+                      <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}{comp && <span style={{ marginLeft: 7, fontSize: 9.5, color: "#8aba8a", fontWeight: 600, letterSpacing: 0.5, padding: "2px 7px", borderRadius: 10, background: "rgba(90,138,90,0.12)", border: "1px solid rgba(90,138,90,0.3)", whiteSpace: "nowrap" }}>COMPLIMENTARY</span>}</div>
                       {DESCRIPTIONS[cat + "|||" + service.name] && <div style={{ fontSize: 10.5, color: "#8a8a8a", marginTop: 2, lineHeight: 1.35 }}>{PKG_CATS.has(cat) ? "Includes: " : ""}{DESCRIPTIONS[cat + "|||" + service.name]}</div>}
-                      <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{service.wasPrice && <span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.wasPrice)}</span>}{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>
+                      {comp
+                        ? <div style={{ fontSize: 11, color: "#7a9e7a", marginTop: 2 }}><span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.price)}</span>Free with weight-loss plan</div>
+                        : <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{service.wasPrice && <span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.wasPrice)}</span>}{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>}
                     </div>
                     {perUnit ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 12 }}>
@@ -1149,7 +1159,7 @@ function App() {
                       </div>
                     )}
                     <div style={{ textAlign: "right", minWidth: 82, marginLeft: 12 }}>
-                      <div style={{ fontSize: 13, color: PINK, fontWeight: 600 }}>{fmt(lineTotal)}</div>
+                      <div style={{ fontSize: 13, color: comp ? "#7a9e7a" : PINK, fontWeight: 600 }}>{comp ? "Free" : fmt(lineTotal)}</div>
                     </div>
                     <button onClick={() => removeItem(key)} title="Remove" style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid rgba(255,80,80,0.25)", background: "rgba(255,80,80,0.06)", color: "#c55", fontSize: 15, marginLeft: 10, flexShrink: 0, cursor: "pointer" }}>✕</button>
                   </div>

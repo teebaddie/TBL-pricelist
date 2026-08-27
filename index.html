@@ -505,9 +505,11 @@ function App() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEditCat, setBulkEditCat] = useState("");
   const [bulkEditRows, setBulkEditRows] = useState([]);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
 
   // Load prices
   const seededRef = React.useRef(false);
+  const loadedValueRef = React.useRef(null); // the Firestore price string this page is showing (drives the "updated — refresh" banner)
 
   const load = async () => {
     // Step 1: Load from localStorage immediately — this NEVER gets wiped
@@ -522,6 +524,7 @@ function App() {
       if (val) {
         // Firestore has data — update localStorage and display
         localStorage.setItem(CACHE_KEY, val);
+        loadedValueRef.current = val;
         try { setServices(buildFromStored(JSON.parse(val))); } catch(e) {}
       } else if (!localCache && !seededRef.current) {
         // Nothing anywhere — first ever load, seed with defaults
@@ -529,6 +532,7 @@ function App() {
         const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
         const payload = serialize(Object.keys(fresh), fresh);
         localStorage.setItem(CACHE_KEY, payload);
+        loadedValueRef.current = payload;
         try { await fsSet(payload); } catch(e) {}
         setServices(fresh);
       }
@@ -539,11 +543,21 @@ function App() {
     }
   };
 
+  // Detect when the live price list has changed since this page loaded → show a "refresh" banner
+  // (rather than silently changing prices mid-quote).
+  const checkUpdate = async () => {
+    try {
+      const val = await fsGet();
+      if (val && loadedValueRef.current && val !== loadedValueRef.current) setUpdateAvailable(true);
+    } catch(e) {}
+  };
+
   useEffect(() => {
     load();
-    const onVis = () => { if (!document.hidden) load(); };
+    const onVis = () => { if (!document.hidden) checkUpdate(); };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
+    const iv = setInterval(checkUpdate, 45000);
+    return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(iv); };
   }, []);
 
   // Auto-convert 4 same-dose Tirzepatide single shots → the matching drug-only monthly course (Level).
@@ -846,6 +860,7 @@ function App() {
     // Sync to Firestore (required for other devices to see changes)
     try {
       await fsSet(payload);
+      loadedValueRef.current = payload; setUpdateAvailable(false);
       setSaveStatus("saved");
     } catch(e) {
       setSaveStatus("error");
@@ -862,6 +877,7 @@ function App() {
     setEditData({ catOrder: Object.keys(fresh), prices: clone(fresh) });
     setShowReset(false);
     setSaveStatus("saved");
+    loadedValueRef.current = payload; setUpdateAvailable(false);
     try { await fsSet(payload); } catch(e) {}
     setTimeout(() => setSaveStatus(""), 4000);
   };
@@ -894,6 +910,12 @@ function App() {
 
   return (
     <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 500, minHeight: "100vh", background: "#000", color: "#fff" }}>
+      {updateAvailable && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 3000, background: "#f3c2d7", color: "#000", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 13, fontWeight: 600, boxShadow: "0 2px 12px rgba(0,0,0,0.5)", flexWrap: "wrap" }}>
+          <span>🔄 The price list was updated — refresh to load the latest prices.</span>
+          <button onClick={() => location.reload()} style={{ fontFamily: "inherit", cursor: "pointer", background: "#000", color: "#fff", border: "none", borderRadius: 16, padding: "6px 18px", fontSize: 12, fontWeight: 700 }}>Refresh</button>
+        </div>
+      )}
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #f3c2d7; border-radius: 2px; }

@@ -64,6 +64,29 @@ async function fsSet(value) {
   return true;
 }
 
+// ── Manual-discount approval (front desk requests → manager approves in Slack) ──
+// Documents root for creating/reading discountRequests docs. A cloud Function
+// (owner-deployed) watches discountRequests/{id}, posts Approve/Deny to Slack,
+// and writes the manager's decision back onto the same doc.
+const FS_DOCS = "https://firestore.googleapis.com/v1/projects/tbl-pricelist/databases/(default)/documents";
+async function fsCreateReq(fields) {
+  const r = await fetch(FS_DOCS + "/discountRequests?key=" + FS_KEY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error(t); }
+  const d = await r.json();
+  return d.name; // full resource path, e.g. projects/…/documents/discountRequests/abc123
+}
+async function fsGetByName(name) {
+  try {
+    const r = await fetch("https://firestore.googleapis.com/v1/" + name + "?key=" + FS_KEY);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) { return null; }
+}
+
 // ── Data ──
 const DEFAULT_SERVICES = {
   "Consultation": [
@@ -507,6 +530,11 @@ function App() {
   const [bulkEditRows, setBulkEditRows] = useState([]);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [installment, setInstallment] = useState(false);
+  // Manual-discount approval request (non-admin staff): idle → pending → approved/denied
+  const [discReq, setDiscReq] = useState(null); // { docName, status, requestedType, requestedValue, who, reason, approvedType, approvedValue }
+  const [reqForm, setReqForm] = useState({ type: "percent", value: "", who: "", reason: "" });
+  const [reqBusy, setReqBusy] = useState(false);
+  const [reqErr, setReqErr] = useState("");
 
   // Load prices
   const seededRef = React.useRef(false);
@@ -590,6 +618,24 @@ function App() {
     window.addEventListener("scroll", fn);
     return () => window.removeEventListener("scroll", fn);
   }, []);
+
+  // While a discount request is pending, poll the doc until the manager approves/denies in Slack.
+  useEffect(() => {
+    if (!discReq || discReq.status !== "pending" || !discReq.docName) return;
+    const iv = setInterval(async () => {
+      const d = await fsGetByName(discReq.docName);
+      const st = d && d.fields && d.fields.status ? d.fields.status.stringValue : null;
+      if (st === "approved") {
+        const at = d.fields.approvedType ? d.fields.approvedType.stringValue : discReq.requestedType;
+        const avf = d.fields.approvedValue || {};
+        const av = Number(avf.integerValue != null ? avf.integerValue : (avf.doubleValue != null ? avf.doubleValue : discReq.requestedValue));
+        setDiscReq(p => p ? { ...p, status: "approved", approvedType: at, approvedValue: av } : p);
+      } else if (st === "denied") {
+        setDiscReq(p => p ? { ...p, status: "denied" } : p);
+      }
+    }, 4000);
+    return () => clearInterval(iv);
+  }, [discReq && discReq.docName, discReq && discReq.status]);
 
   useEffect(() => {
     if (!services) return;
@@ -710,10 +756,20 @@ function App() {
   const introCats = services ? Object.keys(services).filter(c => INTRO_CATS.has(c)) : [];
   const orderedCats = [...regCats, ...pkgCats, ...introCats];
   const consultDisc = suppressConsult ? 0 : disc.amount;
-  const manualDisc = discounts.reduce((s, d) => {
+  // Manual discounts are manager-authorized only. Two authorized paths:
+  //  (1) admin on-site override — the free inputs, shown ONLY when admin mode is unlocked;
+  //  (2) a Slack-approved request — applied at exactly the amount the manager approved.
+  // Regular staff (view passcode only) have no free discount input; they must request approval.
+  const adminManual = isAdmin ? discounts.reduce((s, d) => {
     const v = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
     return s + (d.type === "percent" ? Math.round((v / 100) * subtotal) : v);
-  }, 0);
+  }, 0) : 0;
+  const approvedManual = (discReq && discReq.status === "approved")
+    ? (discReq.approvedType === "percent"
+        ? Math.round((Number(discReq.approvedValue) / 100) * subtotal)
+        : Number(discReq.approvedValue))
+    : 0;
+  const manualDisc = adminManual + approvedManual;
   const totalDisc = consultDisc + manualDisc;
   const discountedSubtotal = Math.max(0, subtotal - totalDisc);
   const vat = Math.round(discountedSubtotal * VAT_RATE);
@@ -722,10 +778,33 @@ function App() {
   const instToday = Math.round(finalTotal * 0.6);
   const instLater = finalTotal - instToday;
 
-  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); setAutoMode(true); setDiscountDay("today"); setInstallment(false); };
+  const clearAll = () => { setSelected({}); setSearch(""); setDiscounts([{ id: 1, value: "", type: "naira" }]); setSuppressConsult(false); setAutoMode(true); setDiscountDay("today"); setInstallment(false); setDiscReq(null); setReqForm({ type: "percent", value: "", who: "", reason: "" }); setReqErr(""); };
   const addDiscount = () => setDiscounts(p => [...p, { id: Date.now(), value: "", type: "naira" }]);
   const removeDiscount = id => setDiscounts(p => p.filter(d => d.id !== id));
   const updateDiscount = (id, f, v) => setDiscounts(p => p.map(d => d.id === id ? { ...d, [f]: v, ...(f === "type" ? { value: "" } : {}) } : d));
+
+  // Front desk submits a manual-discount request for manager approval (via Slack).
+  const submitDiscReq = async () => {
+    const val = parseFloat(String(reqForm.value).replace(/[^0-9.]/g, "")) || 0;
+    if (val <= 0) { setReqErr("Enter a discount amount."); return; }
+    if (!reqForm.who.trim()) { setReqErr("Enter who is requesting (station / name)."); return; }
+    setReqBusy(true); setReqErr("");
+    try {
+      const name = await fsCreateReq({
+        status: { stringValue: "pending" },
+        station: { stringValue: reqForm.who.trim() },
+        cartTotal: { integerValue: String(Math.round(subtotal)) },
+        requestedType: { stringValue: reqForm.type },
+        requestedValue: { integerValue: String(Math.round(val)) },
+        reason: { stringValue: (reqForm.reason.trim() || "—") },
+        createdAt: { timestampValue: new Date().toISOString() }
+      });
+      setDiscReq({ docName: name, status: "pending", requestedType: reqForm.type, requestedValue: val, who: reqForm.who.trim(), reason: reqForm.reason.trim() });
+    } catch (e) {
+      setReqErr("Couldn't send the request. Check the connection and try again.");
+    } finally { setReqBusy(false); }
+  };
+  const cancelDiscReq = () => { setDiscReq(null); setReqForm({ type: "percent", value: "", who: "", reason: "" }); setReqErr(""); };
 
   const filteredSvcs = useMemo(() => {
     if (!services || !search.trim()) return null;
@@ -1257,12 +1336,18 @@ function App() {
                         </div>
                       </div>
                     )}
-                    {discounts.filter(d => (parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0) > 0).map(d => {
+                    {approvedManual > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Manager-approved discount{discReq && discReq.approvedType === "percent" ? ` (${discReq.approvedValue}%)` : ""}</span>
+                        <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(approvedManual)}</span>
+                      </div>
+                    )}
+                    {isAdmin && discounts.filter(d => (parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0) > 0).map(d => {
                       const raw = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
                       const val = d.type === "percent" ? Math.round((raw / 100) * subtotal) : raw;
                       return (
                         <div key={d.id} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Manual discount{d.type === "percent" ? ` (${raw}%)` : ""}</span>
+                          <span style={{ fontSize: 13, color: "#8aba8a" }}>🏷 Admin override{d.type === "percent" ? ` (${raw}%)` : ""}</span>
                           <span style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600 }}>− {fmt(val)}</span>
                         </div>
                       );
@@ -1298,36 +1383,83 @@ function App() {
                   <div style={{ fontSize: 10, color: "#555", lineHeight: 1.5, marginBottom: 14 }}>
                     Bundles {effToday ? "12%" : "6%"} · 4–7 sessions {effToday ? "12%" : "6%"} · 8–11 {effToday ? "14%" : "8%"} · 12+ {effToday ? "16%" : "10%"}{effToday ? " · single service + consultation ₦5,000" : ""}. Services ≤₦20,000: discounted only at 8+ sessions.
                   </div>
-                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Adjustments</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {discounts.map(d => {
-                      const raw = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
-                      const equiv = d.type === "percent" ? Math.round((raw / 100) * subtotal) : 0;
-                      return (
-                        <div key={d.id}>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Manual Discount</div>
+                  {isAdmin ? (
+                    <div>
+                      <div style={{ fontSize: 11, color: "#c9a24b", marginBottom: 10 }}>Admin override — applies immediately (manager on site).</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {discounts.map(d => {
+                          const raw = parseFloat(d.value.replace(/[^0-9.]/g, "")) || 0;
+                          const equiv = d.type === "percent" ? Math.round((raw / 100) * subtotal) : 0;
+                          return (
+                            <div key={d.id}>
+                              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 20, padding: 3, border: "1px solid #2a2a2a", flexShrink: 0 }}>
+                                  {[{ val: "naira", label: "₦" }, { val: "percent", label: "%" }].map(({ val, label }) => (
+                                    <button key={val} onClick={() => updateDiscount(d.id, "type", val)} style={{ ...b, padding: "3px 11px", borderRadius: 16, border: "none", fontSize: 12, fontWeight: 600, background: d.type === val ? PINK : "transparent", color: d.type === val ? "#000" : "#666" }}>{label}</button>
+                                  ))}
+                                </div>
+                                <div style={{ position: "relative", flex: 1 }}>
+                                  <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 13 }}>{d.type === "naira" ? "₦" : "%"}</span>
+                                  <input className="fi" type="number" min="0" value={d.value} onChange={e => updateDiscount(d.id, "value", e.target.value)} placeholder={d.type === "naira" ? "Amount…" : "Percentage…"}
+                                    style={{ width: "100%", padding: "10px 12px 10px 26px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                                </div>
+                                {discounts.length > 1 && <button onClick={() => removeDiscount(d.id)} style={{ ...b, width: 30, height: 30, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#666", fontSize: 18, flexShrink: 0 }}>×</button>}
+                              </div>
+                              {d.type === "percent" && raw > 0 && <div style={{ fontSize: 11, color: "#666", marginTop: 4, paddingLeft: 4 }}>= {fmt(equiv)} off subtotal</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button onClick={addDiscount} style={{ marginTop: 10, width: "100%", padding: 9, background: "transparent", border: "1px dashed rgba(243,194,215,0.3)", borderRadius: 8, color: PINK, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = PINK; e.currentTarget.style.background = "rgba(243,194,215,0.05)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(243,194,215,0.3)"; e.currentTarget.style.background = "transparent"; }}>
+                        + Add Additional Discount
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 10, padding: 14 }}>
+                      {(!discReq || discReq.status === "denied") && (
+                        <div>
+                          <div style={{ fontSize: 11.5, color: "#888", marginBottom: 12, lineHeight: 1.5 }}>Front desk can't apply discounts directly. Enter the discount to request — a manager approves it in Slack and it applies here automatically.</div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
                             <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 20, padding: 3, border: "1px solid #2a2a2a", flexShrink: 0 }}>
                               {[{ val: "naira", label: "₦" }, { val: "percent", label: "%" }].map(({ val, label }) => (
-                                <button key={val} onClick={() => updateDiscount(d.id, "type", val)} style={{ ...b, padding: "3px 11px", borderRadius: 16, border: "none", fontSize: 12, fontWeight: 600, background: d.type === val ? PINK : "transparent", color: d.type === val ? "#000" : "#666" }}>{label}</button>
+                                <button key={val} onClick={() => setReqForm(f => ({ ...f, type: val, value: "" }))} style={{ ...b, padding: "3px 11px", borderRadius: 16, border: "none", fontSize: 12, fontWeight: 600, background: reqForm.type === val ? PINK : "transparent", color: reqForm.type === val ? "#000" : "#666" }}>{label}</button>
                               ))}
                             </div>
                             <div style={{ position: "relative", flex: 1 }}>
-                              <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 13 }}>{d.type === "naira" ? "₦" : "%"}</span>
-                              <input className="fi" type="number" min="0" value={d.value} onChange={e => updateDiscount(d.id, "value", e.target.value)} placeholder={d.type === "naira" ? "Amount…" : "Percentage…"}
+                              <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 13 }}>{reqForm.type === "naira" ? "₦" : "%"}</span>
+                              <input className="fi" type="number" min="0" value={reqForm.value} onChange={e => setReqForm(f => ({ ...f, value: e.target.value }))} placeholder={reqForm.type === "naira" ? "Amount…" : "Percentage…"}
                                 style={{ width: "100%", padding: "10px 12px 10px 26px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
                             </div>
-                            {discounts.length > 1 && <button onClick={() => removeDiscount(d.id)} style={{ ...b, width: 30, height: 30, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#666", fontSize: 18, flexShrink: 0 }}>×</button>}
                           </div>
-                          {d.type === "percent" && raw > 0 && <div style={{ fontSize: 11, color: "#666", marginTop: 4, paddingLeft: 4 }}>= {fmt(equiv)} off subtotal</div>}
+                          <input className="fi" value={reqForm.who} onChange={e => setReqForm(f => ({ ...f, who: e.target.value }))} placeholder="Requested by (station / name)"
+                            style={{ width: "100%", padding: "10px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box" }} />
+                          <input className="fi" value={reqForm.reason} onChange={e => setReqForm(f => ({ ...f, reason: e.target.value }))} placeholder="Reason (optional)"
+                            style={{ width: "100%", padding: "10px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box" }} />
+                          {discReq && discReq.status === "denied" && <div style={{ fontSize: 12, color: "#c0392b", marginBottom: 10 }}>✕ Your last request was denied by the manager.</div>}
+                          {reqErr && <div style={{ fontSize: 11.5, color: "#c0392b", marginBottom: 10 }}>{reqErr}</div>}
+                          <button onClick={submitDiscReq} disabled={reqBusy} style={{ ...b, width: "100%", padding: 11, background: PINK, border: "none", borderRadius: 8, color: "#000", fontSize: 13, fontWeight: 600, opacity: reqBusy ? 0.6 : 1 }}>{reqBusy ? "Sending…" : "Request manager approval"}</button>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <button onClick={addDiscount} style={{ marginTop: 10, width: "100%", padding: 9, background: "transparent", border: "1px dashed rgba(243,194,215,0.3)", borderRadius: 8, color: PINK, fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = PINK; e.currentTarget.style.background = "rgba(243,194,215,0.05)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(243,194,215,0.3)"; e.currentTarget.style.background = "transparent"; }}>
-                    + Add Additional Discount
-                  </button>
+                      )}
+                      {discReq && discReq.status === "pending" && (
+                        <div style={{ textAlign: "center", padding: "6px 0" }}>
+                          <div style={{ fontSize: 13, color: "#c9a24b", fontWeight: 600, marginBottom: 6 }}>⏳ Waiting for manager approval…</div>
+                          <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Requested: {discReq.requestedType === "percent" ? discReq.requestedValue + "% off" : fmt(discReq.requestedValue)}{discReq.who ? " · " + discReq.who : ""}</div>
+                          <div style={{ fontSize: 11, color: "#666", marginBottom: 12 }}>A manager approves or denies this in Slack. Updates automatically.</div>
+                          <button onClick={cancelDiscReq} style={{ ...b, padding: "6px 14px", background: "transparent", border: "1px solid #333", borderRadius: 8, color: "#888", fontSize: 12 }}>Cancel request</button>
+                        </div>
+                      )}
+                      {discReq && discReq.status === "approved" && (
+                        <div style={{ textAlign: "center", padding: "6px 0" }}>
+                          <div style={{ fontSize: 13, color: "#8aba8a", fontWeight: 600, marginBottom: 6 }}>✓ Approved by manager</div>
+                          <div style={{ fontSize: 12, color: "#8aba8a", marginBottom: 12 }}>{discReq.approvedType === "percent" ? discReq.approvedValue + "% off" : fmt(discReq.approvedValue)} applied to this sale.</div>
+                          <button onClick={cancelDiscReq} style={{ ...b, padding: "6px 14px", background: "transparent", border: "1px solid #333", borderRadius: 8, color: "#888", fontSize: 12 }}>Remove / new request</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 16, borderTop: "1px solid rgba(243,194,215,0.2)" }}>

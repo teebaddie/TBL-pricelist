@@ -412,6 +412,10 @@ const COMP_B12_NAME = "Vitamin B12";
 // Individual weight-loss shots/pens/courses get NO auto discount (the discount is the package's deal).
 // The full monthly programs ("Weight-Loss Programs (GLP-1)") DO get the 12%-today / 6%-later package rate.
 const NO_DISC_CATS = new Set(["Weight Loss Programs"]);
+// Exception inside that category: a Tirzepatide "Level" (4 weekly shots, drug only) is a monthly
+// course, so it takes the 1-month PACKAGE discount at the bill screen (12%/6%, capped) — priced at
+// exactly 4× the shot, with the only discount being that explicit one. Single shots/pens never discount.
+const isTirzLevel = (name) => /^Tirzepatide Level /.test(name || "");
 // Auto-convert: every 4 same-dose Tirzepatide single shots become the matching drug-only monthly course
 // (the "Level" = same dose, no drips). A Level is priced at exactly 4× the shot — no hidden discount;
 // the only discount anywhere is the explicit package rate applied at the bill screen.
@@ -725,7 +729,10 @@ function App() {
       if (service.isConsultation) { hasConsult = true; return; }
       if (INTRO_CATS.has(cat)) return;
       if (service.wasPrice) return; // clearance items: price is the locked offer, no further discount
-      if (NO_DISC_CATS.has(cat)) return; // weight-loss shots/pens/Levels: no automatic cart discount — the discount lives on the packages
+      if (NO_DISC_CATS.has(cat)) {
+        if (isTirzLevel(service.name)) { const base = service.price * qty; pkgBase += base; pkgItems.push({ base, qty, months: 1 }); }
+        return; // other weight-loss shots/pens: no automatic cart discount — the discount lives on packages and Levels
+      }
       if (PKG_CATS.has(cat)) { const base = service.price * qty; pkgBase += base; pkgItems.push({ base, qty, months: pkgMonths(service.name) }); return; }
       hasOtherSvc = true;
       if (service.price <= DISCOUNT_FLOOR) { cheapBase += service.price * qty; cheapUnits += qty; }
@@ -1552,10 +1559,10 @@ function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>4–7 sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>8–11 sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>14% today · 8% later</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>12+ sessions</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>16% today · 10% later</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>Skin packages &amp; 1-month weight-loss programs</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦100k / ₦80k</span></span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>Skin packages, Tirzepatide Levels &amp; 1-month weight-loss programs</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦100k / ₦80k</span></span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>2-month weight-loss program <span style={{ color: "#777" }}>(8 sessions)</span></span><span style={{ color: "#8aba8a", fontWeight: 600 }}>14% today · 8% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦220k / ₦200k</span></span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>3-month weight-loss program <span style={{ color: "#777" }}>(12 sessions)</span></span><span style={{ color: "#8aba8a", fontWeight: 600 }}>16% today · 10% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦340k / ₦320k</span></span></div>
-                  <div style={{ marginTop: 8, color: "#888" }}>Packages are priced at exactly the sum of what's in them — the saving is this discount, applied here once. Each package gets its rate <em>or</em> its cap, whichever is smaller. Single weight-loss shots, pens and Levels never discount; B12 is free with any weight-loss plan.</div>
+                  <div style={{ marginTop: 8, color: "#888" }}>Packages are priced at exactly the sum of what's in them — the saving is this discount, applied here once. Each package gets its rate <em>or</em> its cap, whichever is smaller. A Tirzepatide Level (4 shots, no drips) takes the 1-month package rate; single weight-loss shots and pens never discount; B12 is free with any weight-loss plan.</div>
                   <div style={{ marginTop: 8, color: "#888" }}><strong style={{ color: "#aaa" }}>Today</strong> = booked at the consultation visit (needs a Consultation in the cart). <strong style={{ color: "#aaa" }}>Later</strong> = returning / follow-up. Without a Consultation in the cart the calculator uses Later rates automatically.</div>
                   <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(243,194,215,0.05)", border: "1px solid rgba(243,194,215,0.15)", borderRadius: 8, color: "#ccc" }}>
                     <strong style={{ color: PINK }}>Example:</strong> Client at consultation buys 4 laser sessions at ₦50,000 = ₦200,000. Today → 12% = ₦24,000 off. ₦176,000 + 7.5% VAT (₦13,200) = <strong style={{ color: "#fff" }}>₦189,200</strong>.

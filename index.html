@@ -801,7 +801,21 @@ function App() {
   const manualDisc = adminManual + approvedManual;
   const totalDisc = consultDisc + manualDisc;
   const discountedSubtotal = Math.max(0, subtotal - totalDisc);
-  const vat = Math.round(discountedSubtotal * VAT_RATE);
+  // VAT the way AestheticsPro computes it (so quotes match AP invoices to the kobo): the cart
+  // discount is spread across the lines pro-rata, each line's 7.5% VAT is rounded to the kobo,
+  // then summed. This can differ from 7.5% of the total by a kobo or two — that is intended.
+  const round2 = n => Math.round(n * 100) / 100;
+  const vat = (() => {
+    if (subtotal <= 0) return 0;
+    const disc = Math.min(totalDisc, subtotal);
+    let t = 0;
+    selItems.forEach(({ service, qty }) => {
+      const line = (isCompB12(service) ? 0 : service.price) * qty;
+      const net = line - disc * (line / subtotal);
+      t += round2(net * VAT_RATE);
+    });
+    return round2(t);
+  })();
   const finalTotal = discountedSubtotal + vat;
   // Installment plan (2 payments only): 60% due today, 40% balance at next appointment.
   const instToday = Math.round(finalTotal * 0.6);

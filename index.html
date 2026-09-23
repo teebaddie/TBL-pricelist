@@ -442,7 +442,9 @@ const ADMIN_PASSWORD = "TBL@2025";
 const VIEW_PASSCODE = "TBL@2026";
 const PINK = "#f3c2d7";
 const VAT_RATE = 0.075;
-const fmt = n => "₦" + Math.max(0, Number(n)).toLocaleString("en-NG", { minimumFractionDigits: 2 });
+const fmt = n => "₦" + Math.max(0, Number(n)).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Prices are stored to the kobo (2 dp) so they can match AestheticsPro exactly.
+const toKobo = v => Math.round((parseFloat(String(v).replace(/[^0-9.]/g, "")) || 0) * 100) / 100;
 const clone = o => JSON.parse(JSON.stringify(o));
 
 function sortedAlpha(data) {
@@ -708,7 +710,7 @@ function App() {
   const cartHasWL = selItems.some(({ cat }) => WL_CATS.has(cat));
   const isCompB12 = (service) => cartHasWL && !!service && service.name === COMP_B12_NAME;
 
-  const subtotal = selItems.reduce((s, { service, qty }) => s + (isCompB12(service) ? 0 : service.price) * qty, 0);
+  const subtotal = Math.round(selItems.reduce((s, { service, qty }) => s + (isCompB12(service) ? 0 : service.price) * qty, 0) * 100) / 100;
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
   const hasAutoDiscount = false;
   // ── Auto discount engine ──────────────────────────────────────────────
@@ -800,7 +802,7 @@ function App() {
     : 0;
   const manualDisc = adminManual + approvedManual;
   const totalDisc = consultDisc + manualDisc;
-  const discountedSubtotal = Math.max(0, subtotal - totalDisc);
+  const discountedSubtotal = Math.round(Math.max(0, subtotal - totalDisc) * 100) / 100;
   // VAT the way AestheticsPro computes it (so quotes match AP invoices to the kobo): the cart
   // discount is spread across the lines pro-rata, each line's 7.5% VAT is rounded to the kobo,
   // then summed. This can differ from 7.5% of the total by a kobo or two — that is intended.
@@ -816,7 +818,7 @@ function App() {
     });
     return round2(t);
   })();
-  const finalTotal = discountedSubtotal + vat;
+  const finalTotal = Math.round((discountedSubtotal + vat) * 100) / 100;
   // Installment plan (2 payments only): 60% due today, 40% balance at next appointment.
   const instToday = Math.round(finalTotal * 0.6);
   const instLater = finalTotal - instToday;
@@ -876,7 +878,7 @@ function App() {
   const deleteSvc = (cat, idx) => setEditData(p => { const n = clone(p); n.prices[cat].splice(idx, 1); return n; });
   const addSvc = (cat) => {
     if (!addForm || addForm.cat !== cat || !addForm.name.trim()) return;
-    const price = parseInt(String(addForm.price).replace(/[^0-9]/g, ""), 10) || 0;
+    const price = toKobo(addForm.price);
     setEditData(p => {
       const n = clone(p);
       if (!n.prices[cat]) n.prices[cat] = [];
@@ -931,7 +933,7 @@ function App() {
     setEditData(p => {
       const n = clone(p);
       if (!n.prices[targetCat]) { n.prices[targetCat] = []; n.catOrder = [...n.catOrder, targetCat].sort((a, b) => a.localeCompare(b)); }
-      valid.forEach(r => n.prices[targetCat].push({ name: r.name.trim(), price: parseInt(String(r.price).replace(/[^0-9]/g, ""), 10) || 0 }));
+      valid.forEach(r => n.prices[targetCat].push({ name: r.name.trim(), price: toKobo(r.price) }));
       n.prices[targetCat].sort((a, b) => a.name.localeCompare(b.name));
       return n;
     });
@@ -954,8 +956,8 @@ function App() {
       const n = clone(p);
       n.prices[cat] = bulkEditRows.filter(r => r.name.trim()).map(r => {
         const def = DEFAULT_SERVICES[cat]?.find(d => d.name === r.name);
-        return def ? { ...def, price: parseInt(String(r.price).replace(/[^0-9]/g, ""), 10) || 0 }
-          : { name: r.name.trim(), price: parseInt(String(r.price).replace(/[^0-9]/g, ""), 10) || 0 };
+        return def ? { ...def, price: toKobo(r.price) }
+          : { name: r.name.trim(), price: toKobo(r.price) };
       }).sort((a, b) => a.name.localeCompare(b.name));
       return n;
     });
@@ -969,9 +971,9 @@ function App() {
     const final = {}, storage = {};
     editData.catOrder.forEach(cat => {
       final[cat] = (editData.prices[cat] || []).map(item => {
-        const price = parseInt(String(item.price).replace(/[^0-9]/g, ""), 10) || 0;
+        const price = toKobo(item.price);
         const out = { ...item, price };
-        if (item.perUnit) out.unitPrice = parseInt(String(item.unitPrice != null ? item.unitPrice : item.price).replace(/[^0-9]/g, ""), 10) || 0;
+        if (item.perUnit) out.unitPrice = toKobo(item.unitPrice != null ? item.unitPrice : item.price);
         return out;
       });
       storage[cat] = final[cat].map(({ name, price, wasPrice }) => wasPrice != null ? ({ name, price, wasPrice }) : ({ name, price }));
@@ -1160,7 +1162,7 @@ function App() {
                     style={{ flex: 2, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
                   <div style={{ position: "relative", flex: 1 }}>
                     <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 12 }}>₦</span>
-                    <input className="fi" type="number" min="0" placeholder="Price" value={row.price} onChange={e => updateBulkRow(row.id, "price", e.target.value)}
+                    <input className="fi" type="number" min="0" step="0.01" placeholder="Price" value={row.price} onChange={e => updateBulkRow(row.id, "price", e.target.value)}
                       style={{ width: "100%", padding: "9px 10px 9px 24px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
                   </div>
                   {bulkRows.length > 1 && <button onClick={() => removeBulkRow(row.id)} style={{ ...b, width: 28, height: 28, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#666", fontSize: 16, flexShrink: 0 }}>×</button>}
@@ -1192,7 +1194,7 @@ function App() {
                   <div style={{ flex: 2, fontSize: 12, color: "#ccc", padding: "9px 0" }}>{row.name}</div>
                   <div style={{ position: "relative", flex: 1 }}>
                     <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 12 }}>₦</span>
-                    <input className="fi" type="number" min="0" value={row.price} onChange={e => updateBulkEditRow(row.id, "price", e.target.value)}
+                    <input className="fi" type="number" min="0" step="0.01" value={row.price} onChange={e => updateBulkEditRow(row.id, "price", e.target.value)}
                       style={{ width: "100%", padding: "9px 10px 9px 24px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit", textAlign: "right" }} />
                   </div>
                   <button onClick={() => removeBulkEditRow(row.id)} style={{ ...b, width: 28, height: 28, borderRadius: "50%", border: "1px solid #333", background: "none", color: "#666", fontSize: 16, flexShrink: 0 }}>×</button>
@@ -1277,7 +1279,7 @@ function App() {
                               <>
                                 {svc.wasPrice && <div style={{ fontSize: 11, color: "#888", textDecoration: "line-through" }}>{fmt(svc.wasPrice)}</div>}
                                 <div style={{ fontSize: 13, color: PINK }}>{fmt(svc.price)}{svc.wasPrice && <span style={{ fontSize: 9, color: "#8aba8a", marginLeft: 5, letterSpacing: 0.5 }}>CLEARANCE</span>}</div>
-                                <div style={{ fontSize: 10, color: "#777" }}>{fmt(Math.round(svc.price * (1 + VAT_RATE)))} +VAT</div>
+                                <div style={{ fontSize: 10, color: "#777" }}>{fmt(Math.round(svc.price * (1 + VAT_RATE) * 100) / 100)} +VAT</div>
                               </>
                             )}
                           </div>
@@ -1630,7 +1632,7 @@ function App() {
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                           <span style={{ color: PINK, fontSize: 13 }}>₦</span>
-                          <input className="fi" type="number" min="0" value={svc.perUnit ? svc.unitPrice : svc.price} onChange={e => setPrice(cat, idx, e.target.value)}
+                          <input className="fi" type="number" min="0" step="0.01" value={svc.perUnit ? svc.unitPrice : svc.price} onChange={e => setPrice(cat, idx, e.target.value)}
                             style={{ width: 120, padding: "8px 10px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit", textAlign: "right" }} />
                           {svc.perUnit && <span style={{ color: "#777", fontSize: 11 }}>/unit</span>}
                           <button className="db" onClick={() => deleteSvc(cat, idx)}
@@ -1646,7 +1648,7 @@ function App() {
                             style={{ flex: 2, minWidth: 140, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
                           <div style={{ position: "relative", flex: 1, minWidth: 110 }}>
                             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: PINK, fontSize: 12 }}>₦</span>
-                            <input className="fi" type="number" min="0" placeholder="Price" value={addForm.price} onChange={e => setAddForm(p => ({ ...p, price: e.target.value }))} onKeyDown={e => e.key === "Enter" && addSvc(cat)}
+                            <input className="fi" type="number" min="0" step="0.01" placeholder="Price" value={addForm.price} onChange={e => setAddForm(p => ({ ...p, price: e.target.value }))} onKeyDown={e => e.key === "Enter" && addSvc(cat)}
                               style={{ width: "100%", padding: "9px 10px 9px 24px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
                           </div>
                           <button onClick={() => addSvc(cat)} style={{ ...b, padding: "9px 18px", background: PINK, border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>Add</button>

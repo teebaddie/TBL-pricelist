@@ -706,11 +706,23 @@ function App() {
       key, cat, qty, service: services[cat]?.[idx]
     })).filter(x => x.service), [selected, services]);
 
-  // Vitamin B12 is complimentary (₦0) whenever any weight-loss item is in the cart — it's included free with weight-loss plans.
-  const cartHasWL = selItems.some(({ cat }) => WL_CATS.has(cat));
-  const isCompB12 = (service) => cartHasWL && !!service && service.name === COMP_B12_NAME;
+  // Vitamin B12 is complimentary ONLY as part of a package that includes it (owner rule 2026-09-24).
+  // The allowance is read off the package names in the cart ("… 4 B12 Free" → 4, "… + B12" → 4) × package qty.
+  // B12 bought on its own, or alongside a single shot / pen / outside injectable, is charged at list price.
+  // Any B12 units above the allowance are charged too.
+  const b12Allowance = selItems.reduce((n, { service, qty }) => {
+    if (!service || service.name === COMP_B12_NAME) return n;
+    const m = /(\d+)\s*B12/i.exec(service.name);
+    if (m) return n + parseInt(m[1], 10) * (parseInt(qty, 10) || 0);
+    if (/\+\s*B12\b/i.test(service.name)) return n + 4 * (parseInt(qty, 10) || 0);
+    return n;
+  }, 0);
+  const isB12 = (service) => !!service && service.name === COMP_B12_NAME;
+  const b12FreeUnits = (service, qty) => isB12(service) ? Math.min(parseInt(qty, 10) || 0, b12Allowance) : 0;
+  const chargedQty = (service, qty) => (parseInt(qty, 10) || 0) - b12FreeUnits(service, qty);
+  const isCompB12 = (service) => isB12(service) && b12Allowance > 0; // keeps the legacy name: "this B12 line is (at least partly) complimentary"
 
-  const subtotal = Math.round(selItems.reduce((s, { service, qty }) => s + (isCompB12(service) ? 0 : service.price) * qty, 0) * 100) / 100;
+  const subtotal = Math.round(selItems.reduce((s, { service, qty }) => s + service.price * chargedQty(service, qty), 0) * 100) / 100;
   const hasNonConsult = selItems.some(({ service }) => !service.isConsultation);
   const hasAutoDiscount = false;
   // ── Auto discount engine ──────────────────────────────────────────────
@@ -727,7 +739,7 @@ function App() {
     let pkgBase = 0, expBase = 0, expUnits = 0, cheapBase = 0, cheapUnits = 0, hasConsult = false, hasOtherSvc = false;
     const pkgItems = [];
     selItems.forEach(({ cat, service, qty }) => {
-      if (isCompB12(service)) return; // complimentary B12 is ₦0 — never counts toward a discount tier
+      if (isB12(service)) { qty = chargedQty(service, qty); if (qty <= 0) return; } // only PAID B12 units count toward a tier
       if (service.isConsultation) { hasConsult = true; return; }
       if (INTRO_CATS.has(cat)) return;
       if (service.wasPrice) return; // clearance items: price is the locked offer, no further discount
@@ -812,7 +824,7 @@ function App() {
     const disc = Math.min(totalDisc, subtotal);
     let t = 0;
     selItems.forEach(({ service, qty }) => {
-      const line = (isCompB12(service) ? 0 : service.price) * qty;
+      const line = service.price * chargedQty(service, qty);
       const net = line - disc * (line / subtotal);
       t += round2(net * VAT_RATE);
     });
@@ -1313,16 +1325,17 @@ function App() {
                 </div>
                 {selItems.map(({ key, cat, service, qty }) => {
                   const perUnit = !!service.perUnit;
-                  const comp = isCompB12(service);
-                  const rate = comp ? 0 : (perUnit ? service.unitPrice : service.price);
-                  const lineTotal = rate * (parseInt(qty, 10) || 0);
+                  const freeU = b12FreeUnits(service, qty);
+                  const comp = freeU > 0;
+                  const rate = perUnit ? service.unitPrice : service.price;
+                  const lineTotal = rate * chargedQty(service, qty);
                   return (
                   <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}{comp && <span style={{ marginLeft: 7, fontSize: 9.5, color: "#8aba8a", fontWeight: 600, letterSpacing: 0.5, padding: "2px 7px", borderRadius: 10, background: "rgba(90,138,90,0.12)", border: "1px solid rgba(90,138,90,0.3)", whiteSpace: "nowrap" }}>COMPLIMENTARY</span>}</div>
+                      <div style={{ fontSize: 13, color: "#e0e0e0" }}>{service.name}{comp && <span style={{ marginLeft: 7, fontSize: 9.5, color: "#8aba8a", fontWeight: 600, letterSpacing: 0.5, padding: "2px 7px", borderRadius: 10, background: "rgba(90,138,90,0.12)", border: "1px solid rgba(90,138,90,0.3)", whiteSpace: "nowrap" }}>{freeU >= (parseInt(qty, 10) || 0) ? "COMPLIMENTARY" : `${freeU} of ${qty} FREE`}</span>}</div>
                       {DESCRIPTIONS[cat + "|||" + service.name] && <div style={{ fontSize: 10.5, color: "#8a8a8a", marginTop: 2, lineHeight: 1.35 }}>{PKG_CATS.has(cat) ? "Includes: " : ""}{DESCRIPTIONS[cat + "|||" + service.name]}</div>}
                       {comp
-                        ? <div style={{ fontSize: 11, color: "#7a9e7a", marginTop: 2 }}><span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.price)}</span>Free with weight-loss plan</div>
+                        ? <div style={{ fontSize: 11, color: "#7a9e7a", marginTop: 2 }}>{freeU >= (parseInt(qty, 10) || 0) ? <><span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.price)}</span>Included in package</> : <>{freeU} included in package · {(parseInt(qty, 10) || 0) - freeU} × {fmt(service.price)} charged</>}</div>
                         : <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{service.wasPrice && <span style={{ textDecoration: "line-through", color: "#888", marginRight: 5 }}>{fmt(service.wasPrice)}</span>}{fmt(rate)} {perUnit ? "/ unit" : "each"}{perUnit ? ` · min ${service.minUnits}` : ""}</div>}
                     </div>
                     {perUnit ? (
@@ -1344,7 +1357,7 @@ function App() {
                       </div>
                     )}
                     <div style={{ textAlign: "right", minWidth: 82, marginLeft: 12 }}>
-                      <div style={{ fontSize: 13, color: comp ? "#7a9e7a" : PINK, fontWeight: 600 }}>{comp ? "Free" : fmt(lineTotal)}</div>
+                      <div style={{ fontSize: 13, color: comp ? "#7a9e7a" : PINK, fontWeight: 600 }}>{comp && lineTotal <= 0 ? "Free" : fmt(lineTotal)}</div>
                     </div>
                     <button onClick={() => removeItem(key)} title="Remove" style={{ ...b, width: 26, height: 26, borderRadius: "50%", border: "1px solid rgba(255,80,80,0.25)", background: "rgba(255,80,80,0.06)", color: "#c55", fontSize: 15, marginLeft: 10, flexShrink: 0, cursor: "pointer" }}>✕</button>
                   </div>
@@ -1541,7 +1554,7 @@ function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>Skin packages, Tirzepatide Levels &amp; 1-month weight-loss programs</span><span style={{ color: "#8aba8a", fontWeight: 600 }}>12% today · 6% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦100k / ₦80k</span></span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>2-month weight-loss program <span style={{ color: "#777" }}>(8 sessions)</span></span><span style={{ color: "#8aba8a", fontWeight: 600 }}>14% today · 8% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦220k / ₦200k</span></span></div>
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid #1c1c1c" }}><span>3-month weight-loss program <span style={{ color: "#777" }}>(12 sessions)</span></span><span style={{ color: "#8aba8a", fontWeight: 600 }}>16% today · 10% later <span style={{ color: "#777", fontWeight: 400 }}>· max ₦340k / ₦320k</span></span></div>
-                  <div style={{ marginTop: 8, color: "#888" }}>Packages are priced at exactly the sum of what's in them — the saving is this discount, applied here once. Each package gets its rate <em>or</em> its cap, whichever is smaller. A Tirzepatide Level (4 shots, no drips) takes the 1-month package rate; single weight-loss shots and pens never discount; B12 is free with any weight-loss plan.</div>
+                  <div style={{ marginTop: 8, color: "#888" }}>Packages are priced at exactly the sum of what's in them — the saving is this discount, applied here once. Each package gets its rate <em>or</em> its cap, whichever is smaller. A Tirzepatide Level (4 shots, no drips) takes the 1-month package rate; single weight-loss shots and pens never discount. B12 is free only as part of a package that includes it (the number in the package name); B12 on its own or with a single shot/pen is charged.</div>
                   <div style={{ marginTop: 8, color: "#888" }}><strong style={{ color: "#aaa" }}>Today</strong> = booked at the consultation visit (needs a Consultation in the cart). <strong style={{ color: "#aaa" }}>Later</strong> = returning / follow-up. Without a Consultation in the cart the calculator uses Later rates automatically.</div>
                   <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(243,194,215,0.05)", border: "1px solid rgba(243,194,215,0.15)", borderRadius: 8, color: "#ccc" }}>
                     <strong style={{ color: PINK }}>Example:</strong> Client at consultation buys 4 laser sessions at ₦50,000 = ₦200,000. Today → 12% = ₦24,000 off. ₦176,000 + 7.5% VAT (₦13,200) = <strong style={{ color: "#fff" }}>₦189,200</strong>.

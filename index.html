@@ -87,6 +87,32 @@ async function fsGetByName(name) {
   } catch (e) { return null; }
 }
 
+// ── Access control ──
+// The staff passcode and the admin password live in Firestore (settings/access) as SHA-256 hashes, so the
+// owner can change them from the admin panel (no code deploy). `ver` goes up on every change; any device
+// that is unlocked on an older `ver` is sent back to the passcode screen within a minute (or on next
+// reload). The last-known hashes are cached in localStorage so a device that is briefly offline still uses
+// the latest passcode; the constants VIEW_PASSCODE / ADMIN_PASSWORD are only the defaults before the first change.
+const FS_ACCESS = FS_DOCS + "/settings/access";
+const ACCESS_CACHE_KEY = "tbl_access_cache";
+const sha256 = async (s) => { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(s))); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); };
+async function fsGetAccess() {
+  try {
+    const r = await fetch(FS_ACCESS + "?key=" + FS_KEY);
+    if (!r.ok) return null;
+    const f = (await r.json()).fields || {};
+    return { staffHash: f.staffHash?.stringValue || null, adminHash: f.adminHash?.stringValue || null, ver: parseInt(f.ver?.integerValue || "0", 10) || 0 };
+  } catch (e) { return null; }
+}
+async function fsSetAccess(fields) {
+  const body = { fields: {} };
+  Object.entries(fields).forEach(([k, v]) => { body.fields[k] = typeof v === "number" ? { integerValue: String(v) } : { stringValue: String(v) }; });
+  const mask = Object.keys(fields).map(k => "updateMask.fieldPaths=" + k).join("&");
+  const r = await fetch(FS_ACCESS + "?key=" + FS_KEY + "&" + mask, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return true;
+}
+
 // ── Data ──
 const DEFAULT_SERVICES = {
   "Consultation": [
@@ -438,6 +464,7 @@ const PKG_CAP  = { 1: { today: 100000, later: 80000 }, 2: { today: 220000, later
 // Program length is read from the item name ("… 2 Month Program …"); anything else counts as 1 month.
 const pkgMonths = (name) => { const m = /(\d)\s*Month/i.exec(name || ""); const n = m ? parseInt(m[1], 10) : 1; return n >= 1 && n <= 3 ? n : 1; };
 
+// DEFAULTS ONLY — used until the owner sets new ones in the admin panel (Access & passwords). See fsGetAccess.
 const ADMIN_PASSWORD = "TBL@2025";
 const VIEW_PASSCODE = "TBL@2026";
 const PINK = "#f3c2d7";
@@ -516,6 +543,43 @@ function App() {
   const [discountDay, setDiscountDay] = useState("today");
   const [pageUnlocked, setPageUnlocked] = useState(false);
   const [gateInput, setGateInput] = useState("");
+  // Access control (see fsGetAccess). `access` = latest known hashes; `unlockedVer` = the ver this device unlocked on.
+  const [access, setAccess] = useState(() => { try { return JSON.parse(localStorage.getItem(ACCESS_CACHE_KEY) || "null"); } catch (e) { return null; } });
+  const [unlockedVer, setUnlockedVer] = useState(-1);
+  const [pwForm, setPwForm] = useState({ staff1: "", staff2: "", adminCur: "", admin1: "", admin2: "", msg: "", err: "", busy: false });
+  const applyAccess = (a) => { if (!a) return; setAccess(a); try { localStorage.setItem(ACCESS_CACHE_KEY, JSON.stringify(a)); } catch (e) {} };
+  const checkStaffCode = async (code) => { const h = await sha256(code); return access && access.staffHash ? h === access.staffHash : code === VIEW_PASSCODE; };
+  const checkAdminCode = async (code) => { const h = await sha256(code); return access && access.adminHash ? h === access.adminHash : code === ADMIN_PASSWORD; };
+  const tryUnlock = async () => { if (await checkStaffCode(gateInput)) { setPageUnlocked(true); setUnlockedVer(access ? access.ver : 0); setGateInput(""); } else setGateErr(true); };
+  const changeStaffCode = async () => {
+    const { staff1, staff2 } = pwForm;
+    if (staff1.length < 4) return setPwForm(f => ({ ...f, err: "Passcode must be at least 4 characters.", msg: "" }));
+    if (staff1 !== staff2) return setPwForm(f => ({ ...f, err: "The two passcodes don't match.", msg: "" }));
+    setPwForm(f => ({ ...f, busy: true, err: "", msg: "" }));
+    try {
+      const ver = (access ? access.ver : 0) + 1;
+      const staffHash = await sha256(staff1);
+      await fsSetAccess({ staffHash, ver, updatedAt: new Date().toISOString() });
+      applyAccess({ staffHash, adminHash: access ? access.adminHash : null, ver });
+      setUnlockedVer(ver);
+      setPwForm(f => ({ ...f, staff1: "", staff2: "", busy: false, msg: "✓ Staff passcode changed. Every open device will ask for the new passcode within a minute." }));
+    } catch (e) { setPwForm(f => ({ ...f, busy: false, err: "Could not save: " + (e.message || e) })); }
+  };
+  const changeAdminCode = async () => {
+    const { adminCur, admin1, admin2 } = pwForm;
+    if (!(await checkAdminCode(adminCur))) return setPwForm(f => ({ ...f, err: "Current admin password is wrong.", msg: "" }));
+    if (admin1.length < 6) return setPwForm(f => ({ ...f, err: "Admin password must be at least 6 characters.", msg: "" }));
+    if (admin1 !== admin2) return setPwForm(f => ({ ...f, err: "The two admin passwords don't match.", msg: "" }));
+    setPwForm(f => ({ ...f, busy: true, err: "", msg: "" }));
+    try {
+      const ver = (access ? access.ver : 0) + 1;
+      const adminHash = await sha256(admin1);
+      await fsSetAccess({ adminHash, ver, updatedAt: new Date().toISOString() });
+      applyAccess({ staffHash: access ? access.staffHash : null, adminHash, ver });
+      setUnlockedVer(ver);
+      setPwForm(f => ({ ...f, adminCur: "", admin1: "", admin2: "", busy: false, msg: "✓ Admin password changed." }));
+    } catch (e) { setPwForm(f => ({ ...f, busy: false, err: "Could not save: " + (e.message || e) })); }
+  };
   const [gateErr, setGateErr] = useState(false);
   const [suppressConsult, setSuppressConsult] = useState(false);
   const [showBackTop, setShowBackTop] = useState(false);
@@ -594,7 +658,17 @@ function App() {
       const val = await fsGet();
       if (val && loadedValueRef.current && val !== loadedValueRef.current) setUpdateAvailable(true);
     } catch(e) {}
+    try {
+      const a = await fsGetAccess();
+      if (a) { applyAccess(a); setAccess(a); }
+    } catch(e) {}
   };
+  // A passcode change anywhere (ver went up) locks this device again — the leaver's iPad included.
+  useEffect(() => {
+    if (pageUnlocked && access && unlockedVer >= 0 && access.ver > unlockedVer) {
+      setPageUnlocked(false); setIsAdmin(false); setEditData(null); setActiveTab("select"); setGateErr(false);
+    }
+  }, [access, pageUnlocked, unlockedVer]);
 
   useEffect(() => {
     load();
@@ -877,8 +951,8 @@ function App() {
     if (isAdmin) { setIsAdmin(false); setEditData(null); setAdminSearch(""); setAddForm(null); setActiveTab("select"); }
     else { setPwInput(""); setPwError(""); setShowPw(true); }
   };
-  const handlePwSubmit = () => {
-    if (pwInput === ADMIN_PASSWORD) {
+  const handlePwSubmit = async () => {
+    if (await checkAdminCode(pwInput)) {
       setIsAdmin(true); setShowPw(false); setPwInput(""); setPwError("");
       const sorted = sortedAlpha(services);
       setEditData({ catOrder: Object.keys(sorted), prices: sorted });
@@ -1032,9 +1106,9 @@ function App() {
       <div style={{ textAlign: "center", maxWidth: 320, width: "100%", padding: 24 }}>
         <div style={{ fontFamily: "'Sacramento', cursive", fontSize: 42, color: PINK, marginBottom: 4 }}>The Baddie Lab</div>
         <div style={{ color: "#888", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", marginBottom: 26 }}>Staff Price Calculator</div>
-        <input type="password" autoFocus value={gateInput} onChange={e => { setGateInput(e.target.value); setGateErr(false); }} onKeyDown={e => { if (e.key === "Enter") { if (gateInput === VIEW_PASSCODE) setPageUnlocked(true); else setGateErr(true); } }} placeholder="Enter passcode" style={{ width: "100%", padding: "13px 14px", background: "#111", border: "1px solid " + (gateErr ? "#c0392b" : "#2a2a2a"), borderRadius: 10, color: "#fff", fontSize: 15, textAlign: "center", fontFamily: "inherit", boxSizing: "border-box" }} />
+        <input type="password" autoFocus value={gateInput} onChange={e => { setGateInput(e.target.value); setGateErr(false); }} onKeyDown={e => { if (e.key === "Enter") tryUnlock(); }} placeholder="Enter passcode" style={{ width: "100%", padding: "13px 14px", background: "#111", border: "1px solid " + (gateErr ? "#c0392b" : "#2a2a2a"), borderRadius: 10, color: "#fff", fontSize: 15, textAlign: "center", fontFamily: "inherit", boxSizing: "border-box" }} />
         {gateErr && <div style={{ color: "#c0392b", fontSize: 12, marginTop: 8 }}>Incorrect passcode</div>}
-        <button onClick={() => { if (gateInput === VIEW_PASSCODE) setPageUnlocked(true); else setGateErr(true); }} style={{ marginTop: 14, width: "100%", padding: 13, background: PINK, border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Enter</button>
+        <button onClick={tryUnlock} style={{ marginTop: 14, width: "100%", padding: 13, background: PINK, border: "none", borderRadius: 10, color: "#000", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Enter</button>
         <div style={{ color: "#555", fontSize: 11, marginTop: 18 }}>Internal use only · not for clients</div>
       </div>
     </div>
@@ -1595,6 +1669,34 @@ function App() {
             </div>
           </div>
 
+          {!adminSearch.trim() && (
+            <details style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "#fff", fontWeight: 600, listStyle: "none" }}>🔑 Access & passwords <span style={{ fontSize: 10.5, color: "#666", fontWeight: 400, marginLeft: 8 }}>change the staff passcode whenever someone leaves</span></summary>
+              <div style={{ marginTop: 12, display: "grid", gap: 18 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "#ddd", fontWeight: 600, marginBottom: 4 }}>Staff passcode (the one on the opening screen)</div>
+                  <div style={{ fontSize: 11, color: "#777", lineHeight: 1.5, marginBottom: 8 }}>Changing it kicks every device back to the passcode screen within about a minute, including any iPad or phone a former staff member still has open. Tell the current team the new passcode first.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input className="fi" type="password" autoComplete="new-password" placeholder="New staff passcode" value={pwForm.staff1} onChange={e => setPwForm(f => ({ ...f, staff1: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                    <input className="fi" type="password" autoComplete="new-password" placeholder="Repeat it" value={pwForm.staff2} onChange={e => setPwForm(f => ({ ...f, staff2: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                    <button onClick={changeStaffCode} disabled={pwForm.busy} style={{ ...b, padding: "9px 14px", background: PINK, border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, opacity: pwForm.busy ? 0.6 : 1 }}>Change staff passcode</button>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#ddd", fontWeight: 600, marginBottom: 4 }}>Admin password (the 🔒 one — managers only)</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input className="fi" type="password" autoComplete="current-password" placeholder="Current admin password" value={pwForm.adminCur} onChange={e => setPwForm(f => ({ ...f, adminCur: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                    <input className="fi" type="password" autoComplete="new-password" placeholder="New admin password" value={pwForm.admin1} onChange={e => setPwForm(f => ({ ...f, admin1: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                    <input className="fi" type="password" autoComplete="new-password" placeholder="Repeat it" value={pwForm.admin2} onChange={e => setPwForm(f => ({ ...f, admin2: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                    <button onClick={changeAdminCode} disabled={pwForm.busy} style={{ ...b, padding: "9px 14px", background: "transparent", border: "1px solid " + PINK, borderRadius: 8, color: PINK, fontSize: 12, fontWeight: 700, opacity: pwForm.busy ? 0.6 : 1 }}>Change admin password</button>
+                  </div>
+                </div>
+                {pwForm.err && <div style={{ fontSize: 12, color: "#e07070" }}>{pwForm.err}</div>}
+                {pwForm.msg && <div style={{ fontSize: 12, color: "#8aba8a" }}>{pwForm.msg}</div>}
+                <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.5 }}>Passcodes are stored as one-way hashes, not as text. If you forget the admin password it cannot be recovered from the app — it has to be reset by editing the Firestore <code>settings/access</code> document.</div>
+              </div>
+            </details>
+          )}
           {editData.catOrder.map((cat, catIdx) => {
             const items = editData.prices[cat] || [];
             const searching = adminSearch.trim() !== "";

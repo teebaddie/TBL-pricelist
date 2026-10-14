@@ -113,6 +113,63 @@ async function fsSetAccess(fields) {
   return true;
 }
 
+// ── Price-change notifications (Slack) ──
+// The owner pastes a Slack incoming-webhook URL in the admin panel (🔔 Notifications). Every admin "Save All"
+// diffs the saved list against the one this page loaded and posts the changes to that webhook — e.g. a DM to
+// the operations manager — so AestheticsPro gets re-keyed. Settings live in Firestore settings/notify.
+const FS_NOTIFY = FS_DOCS + "/settings/notify";
+async function fsGetNotify() {
+  try {
+    const r = await fetch(FS_NOTIFY + "?key=" + FS_KEY);
+    if (!r.ok) return null;
+    const f = (await r.json()).fields || {};
+    return { slackWebhook: f.slackWebhook?.stringValue || "", label: f.label?.stringValue || "" };
+  } catch (e) { return null; }
+}
+async function fsSetNotify(fields) {
+  const body = { fields: {} };
+  Object.entries(fields).forEach(([k, v]) => { body.fields[k] = { stringValue: String(v) }; });
+  const mask = Object.keys(fields).map(k => "updateMask.fieldPaths=" + k).join("&");
+  const r = await fetch(FS_NOTIFY + "?key=" + FS_KEY + "&" + mask, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return true;
+}
+// Slack webhooks don't answer CORS preflights, so the post goes as a "simple" form request (no preflight).
+// The response is opaque — a bad URL fails silently, which is what the "Send test" button is for.
+async function postSlackWebhook(url, text) {
+  await fetch(url, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "payload=" + encodeURIComponent(JSON.stringify({ text })) });
+}
+// Compare two serialized price lists → [{ cat, name, oldPrice, newPrice, oldWas, newWas }] (null price = added/removed).
+function diffPriceLists(oldJson, newJson) {
+  const index = (j) => {
+    const m = new Map();
+    try { const d = JSON.parse(j || "{}"); Object.entries(d.services || {}).forEach(([cat, items]) => (items || []).forEach(it => m.set(cat + "|||" + it.name, it))); } catch (e) {}
+    return m;
+  };
+  const a = index(oldJson), b = index(newJson), out = [];
+  b.forEach((it, key) => {
+    const [cat, name] = key.split("|||"); const prev = a.get(key);
+    if (!prev) out.push({ cat, name, oldPrice: null, newPrice: it.price, oldWas: null, newWas: it.wasPrice ?? null });
+    else if (Number(prev.price) !== Number(it.price) || (prev.wasPrice ?? null) !== (it.wasPrice ?? null)) out.push({ cat, name, oldPrice: prev.price, newPrice: it.price, oldWas: prev.wasPrice ?? null, newWas: it.wasPrice ?? null });
+  });
+  a.forEach((it, key) => { if (!b.has(key)) { const [cat, name] = key.split("|||"); out.push({ cat, name, oldPrice: it.price, newPrice: null, oldWas: it.wasPrice ?? null, newWas: null }); } });
+  return out;
+}
+function formatPriceChanges(changes, source) {
+  const withVat = (p) => fmt(Math.round(Number(p) * 1.075 * 100) / 100);
+  const when = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const lines = changes.slice(0, 40).map(c => {
+    const where = c.cat + " › " + c.name;
+    if (c.oldPrice == null) return "• NEW  " + where + ": *" + fmt(c.newPrice) + "* (+VAT " + withVat(c.newPrice) + ")" + (c.newWas != null ? " — locked, was " + fmt(c.newWas) : "");
+    if (c.newPrice == null) return "• REMOVED  " + where + " (was " + fmt(c.oldPrice) + ")";
+    const priceBit = Number(c.oldPrice) !== Number(c.newPrice) ? fmt(c.oldPrice) + " → *" + fmt(c.newPrice) + "* (+VAT " + withVat(c.oldPrice) + " → " + withVat(c.newPrice) + ")" : fmt(c.newPrice) + " (unchanged)";
+    const wasBit = (c.oldWas ?? null) !== (c.newWas ?? null) ? (c.newWas != null ? " — now locked, was " + fmt(c.newWas) : " — lock removed") : "";
+    return "• " + where + ": " + priceBit + wasBit;
+  });
+  if (changes.length > 40) lines.push("… and " + (changes.length - 40) + " more");
+  return "💸 *Price list updated* — " + when + " (" + source + ")\n" + lines.join("\n") + "\n\nPlease key these into AestheticsPro. Full list: https://teebaddie.github.io/TBL-pricelist/";
+}
+
 // ── Data ──
 const DEFAULT_SERVICES = {
   "Consultation": [
@@ -558,6 +615,38 @@ function App() {
   const [access, setAccess] = useState(() => { try { return JSON.parse(localStorage.getItem(ACCESS_CACHE_KEY) || "null"); } catch (e) { return null; } });
   const [unlockedVer, setUnlockedVer] = useState(-1);
   const [pwForm, setPwForm] = useState({ staff1: "", staff2: "", adminCur: "", admin1: "", admin2: "", msg: "", err: "", busy: false });
+  // Slack price-change notifications (see fsGetNotify). `notify` = saved settings; `notifyForm` = the admin card.
+  const [notify, setNotify] = useState(null);
+  const [notifyForm, setNotifyForm] = useState({ url: "", label: "", msg: "", err: "", busy: false });
+  const saveNotify = async () => {
+    const url = notifyForm.url.trim();
+    if (url && !/^https:\/\/hooks\.slack\.com\/services\//.test(url)) return setNotifyForm(f => ({ ...f, err: "That doesn't look like a Slack incoming-webhook URL (it starts with https://hooks.slack.com/services/…).", msg: "" }));
+    setNotifyForm(f => ({ ...f, busy: true, err: "", msg: "" }));
+    try {
+      await fsSetNotify({ slackWebhook: url, label: notifyForm.label.trim(), updatedAt: new Date().toISOString() });
+      setNotify({ slackWebhook: url, label: notifyForm.label.trim() });
+      setNotifyForm(f => ({ ...f, busy: false, msg: url ? "✓ Saved. Every Save All now posts the price changes to Slack." : "✓ Saved — notifications are off." }));
+    } catch (e) { setNotifyForm(f => ({ ...f, busy: false, err: "Could not save: " + (e.message || e) })); }
+  };
+  const testNotify = async () => {
+    const url = notifyForm.url.trim();
+    if (!url) return setNotifyForm(f => ({ ...f, err: "Paste the webhook URL first.", msg: "" }));
+    setNotifyForm(f => ({ ...f, busy: true, err: "", msg: "" }));
+    try {
+      await postSlackWebhook(url, "🔔 Test from the TBL price calculator — price-change alerts will arrive here" + (notifyForm.label.trim() ? " for " + notifyForm.label.trim() : "") + ".");
+      setNotifyForm(f => ({ ...f, busy: false, msg: "Test sent. If nothing arrived in Slack within a few seconds, the URL is wrong or the webhook was removed." }));
+    } catch (e) { setNotifyForm(f => ({ ...f, busy: false, err: "Could not reach Slack: " + (e.message || e) })); }
+  };
+  // Post the diff between what this page loaded and what was just saved. Never blocks or fails the save.
+  const notifyPriceChanges = async (beforeJson, afterJson, source) => {
+    try {
+      const hook = (notify && notify.slackWebhook) || "";
+      if (!hook) return;
+      const changes = diffPriceLists(beforeJson, afterJson);
+      if (!changes.length) return;
+      await postSlackWebhook(hook, formatPriceChanges(changes, source));
+    } catch (e) {}
+  };
   const applyAccess = (a) => { if (!a) return; setAccess(a); try { localStorage.setItem(ACCESS_CACHE_KEY, JSON.stringify(a)); } catch (e) {} };
   const checkStaffCode = async (code) => { const h = await sha256(code); return access && access.staffHash ? h === access.staffHash : code === VIEW_PASSCODE; };
   const checkAdminCode = async (code) => { const h = await sha256(code); return access && access.adminHash ? h === access.adminHash : code === ADMIN_PASSWORD; };
@@ -672,6 +761,10 @@ function App() {
     try {
       const a = await fsGetAccess();
       if (a) { applyAccess(a); setAccess(a); }
+    } catch(e) {}
+    try {
+      const n = await fsGetNotify();
+      if (n) { setNotify(n); setNotifyForm(f => ({ ...f, url: f.url || n.slackWebhook, label: f.label || n.label })); }
     } catch(e) {}
   };
   // A passcode change anywhere (ver went up) locks this device again — the leaver's iPad included.
@@ -1077,6 +1170,7 @@ function App() {
       storage[cat] = final[cat].map(({ name, price, wasPrice }) => wasPrice != null ? ({ name, price, wasPrice }) : ({ name, price }));
     });
     const payload = serialize(editData.catOrder, final);
+    const before = loadedValueRef.current || serialize(Object.keys(services || {}), services || {});
 
     // Save to localStorage first (protects this device)
     localStorage.setItem(CACHE_KEY, payload);
@@ -1088,6 +1182,7 @@ function App() {
       await fsSet(payload);
       loadedValueRef.current = payload; setUpdateAvailable(false);
       setSaveStatus("saved");
+      notifyPriceChanges(before, payload, "calculator admin panel"); // Slack, if a webhook is set up
     } catch(e) {
       setSaveStatus("error");
       alert("⚠️ Saved on this device only.\n\nFirestore sync failed — other devices will NOT see this update.\n\nError: " + e.message + "\n\nFix: Go to Firebase Console → Firestore → Rules and publish open read/write rules.");
@@ -1098,13 +1193,14 @@ function App() {
   const handleReset = async () => {
     const fresh = sortedAlpha(clone(DEFAULT_SERVICES));
     const payload = serialize(Object.keys(fresh), fresh);
+    const before = loadedValueRef.current;
     localStorage.setItem(CACHE_KEY, payload);
     setServices(fresh);
     setEditData({ catOrder: Object.keys(fresh), prices: clone(fresh) });
     setShowReset(false);
     setSaveStatus("saved");
     loadedValueRef.current = payload; setUpdateAvailable(false);
-    try { await fsSet(payload); } catch(e) {}
+    try { await fsSet(payload); notifyPriceChanges(before, payload, "RESET TO DEFAULTS from the admin panel"); } catch(e) {}
     setTimeout(() => setSaveStatus(""), 4000);
   };
 
@@ -1708,6 +1804,23 @@ function App() {
                 {pwForm.err && <div style={{ fontSize: 12, color: "#e07070" }}>{pwForm.err}</div>}
                 {pwForm.msg && <div style={{ fontSize: 12, color: "#8aba8a" }}>{pwForm.msg}</div>}
                 <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.5 }}>Passcodes are stored as one-way hashes, not as text. If you forget the admin password it cannot be recovered from the app — it has to be reset by editing the Firestore <code>settings/access</code> document.</div>
+              </div>
+            </details>
+          )}
+          {!adminSearch.trim() && (
+            <details style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "#fff", fontWeight: 600, listStyle: "none" }}>🔔 Price-change alerts to Slack <span style={{ fontSize: 10.5, color: notify && notify.slackWebhook ? "#8aba8a" : "#666", fontWeight: 400, marginLeft: 8 }}>{notify && notify.slackWebhook ? "on" + (notify.label ? " — goes to " + notify.label : "") : "off — paste a webhook URL to turn on"}</span></summary>
+              <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+                <div style={{ fontSize: 11, color: "#777", lineHeight: 1.5 }}>Every <b>Save All</b> compares the new list with the old one and posts what changed (old → new, with VAT) to this Slack webhook, so AestheticsPro can be re-keyed. To create one: <code>api.slack.com/apps</code> → your app (or Create New App) → <b>Incoming Webhooks</b> → On → <b>Add New Webhook to Workspace</b> → pick the person's DM or a channel → copy the URL here. Anyone who has this URL can post to that conversation, so don't share it; if it leaks, remove the webhook in Slack and add a new one.</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input className="fi" type="text" autoComplete="off" spellCheck={false} placeholder="https://hooks.slack.com/services/…" value={notifyForm.url} onChange={e => setNotifyForm(f => ({ ...f, url: e.target.value, err: "", msg: "" }))} style={{ flex: 3, minWidth: 240, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "monospace" }} />
+                  <input className="fi" type="text" placeholder="Who gets it (e.g. Mr Victor)" value={notifyForm.label} onChange={e => setNotifyForm(f => ({ ...f, label: e.target.value, err: "", msg: "" }))} style={{ flex: 1, minWidth: 160, padding: "9px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                  <button onClick={saveNotify} disabled={notifyForm.busy} style={{ ...b, padding: "9px 14px", background: PINK, border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, opacity: notifyForm.busy ? 0.6 : 1 }}>Save</button>
+                  <button onClick={testNotify} disabled={notifyForm.busy} style={{ ...b, padding: "9px 14px", background: "transparent", border: "1px solid " + PINK, borderRadius: 8, color: PINK, fontSize: 12, fontWeight: 700, opacity: notifyForm.busy ? 0.6 : 1 }}>Send test</button>
+                </div>
+                {notifyForm.err && <div style={{ fontSize: 12, color: "#e07070" }}>{notifyForm.err}</div>}
+                {notifyForm.msg && <div style={{ fontSize: 12, color: "#8aba8a" }}>{notifyForm.msg}</div>}
+                <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.5 }}>Clear the URL and Save to turn alerts off. Changes made directly in Firestore (not through this panel) are not posted — those still need a manual message.</div>
               </div>
             </details>
           )}

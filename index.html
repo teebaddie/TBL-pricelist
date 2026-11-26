@@ -139,6 +139,81 @@ async function fsSetNotify(fields) {
 async function postSlackWebhook(url, text) {
   await fetch(url, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "payload=" + encodeURIComponent(JSON.stringify({ text })) });
 }
+// ── Price history (Firestore collection `history`, one document per change; written on every admin save) ──
+// Since 2026-11-26 the calculator is the single source of truth for prices (the Google Sheet is retired), so
+// every Save All / Reset records what changed: price edits, items and categories added or removed, renames,
+// and locks (wasPrice). The 📜 Price history card in the admin panel filters and exports them.
+const FS_HISTORY = FS_DOCS + "/history";
+const FS_DOCS_NAME = "projects/tbl-pricelist/databases/(default)/documents";
+const ADMIN_NAME_KEY = "tbl_admin_name";
+const HISTORY_TYPES = { price: "Price change", added: "Added", removed: "Removed", renamed: "Renamed", lock: "Locked (was-price)", unlock: "Lock removed", cat_added: "Category added", cat_removed: "Category removed", import: "Imported (sheet log)" };
+function historyEntries(beforeJson, afterJson, source, by) {
+  const now = new Date().toISOString();
+  const base = { ts: now, source: source || "calculator admin panel", by: by || "" };
+  const out = [];
+  let a = {}, b = {};
+  try { a = JSON.parse(beforeJson || "{}"); } catch (e) {}
+  try { b = JSON.parse(afterJson || "{}"); } catch (e) {}
+  const ca = new Set(a.categories || Object.keys(a.services || {})), cb = new Set(b.categories || Object.keys(b.services || {}));
+  cb.forEach(c => { if (!ca.has(c)) out.push({ ...base, type: "cat_added", cat: c, item: "", old: null, new: null, note: ((b.services || {})[c] || []).length + " item(s)" }); });
+  ca.forEach(c => { if (!cb.has(c)) out.push({ ...base, type: "cat_removed", cat: c, item: "", old: null, new: null, note: ((a.services || {})[c] || []).length + " item(s)" }); });
+  const diff = diffPriceLists(beforeJson, afterJson);
+  const removed = diff.filter(d => d.newPrice == null), added = diff.filter(d => d.oldPrice == null), used = new Set();
+  // A removed + added pair in the same category at the same price is almost always a rename.
+  removed.forEach(r => {
+    const twin = added.find(x => !used.has(x) && x.cat === r.cat && Number(x.newPrice) === Number(r.oldPrice));
+    if (twin) { used.add(twin); used.add(r); out.push({ ...base, type: "renamed", cat: r.cat, item: twin.name, old: r.oldPrice, new: twin.newPrice, note: "was named “" + r.name + "”" }); }
+  });
+  diff.forEach(d => {
+    if (used.has(d)) return;
+    if (d.oldPrice == null) { out.push({ ...base, type: "added", cat: d.cat, item: d.name, old: null, new: d.newPrice, note: d.newWas != null ? "locked, was " + fmt(d.newWas) : "" }); return; }
+    if (d.newPrice == null) { out.push({ ...base, type: "removed", cat: d.cat, item: d.name, old: d.oldPrice, new: null, note: "" }); return; }
+    if (Number(d.oldPrice) !== Number(d.newPrice)) out.push({ ...base, type: "price", cat: d.cat, item: d.name, old: d.oldPrice, new: d.newPrice, note: "" });
+    if ((d.oldWas ?? null) !== (d.newWas ?? null)) out.push({ ...base, type: d.newWas != null ? "lock" : "unlock", cat: d.cat, item: d.name, old: d.oldWas ?? null, new: d.newWas ?? null, note: d.newWas != null ? "shown as “was " + fmt(d.newWas) + "”" : "" });
+  });
+  return out;
+}
+function histField(v) {
+  if (v === null || v === undefined || v === "") return { nullValue: null };
+  if (typeof v === "number") return { doubleValue: v };
+  return { stringValue: String(v) };
+}
+// Writes the entries in one Firestore commit (max 500 per call). Never throws into the caller.
+async function fsAddHistory(entries) {
+  if (!entries || !entries.length) return 0;
+  let n = 0;
+  for (let i = 0; i < entries.length; i += 400) {
+    const writes = entries.slice(i, i + 400).map((e, j) => {
+      const id = e.ts.replace(/[^0-9]/g, "").slice(0, 17) + "-" + (i + j).toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+      const fields = { ts: { timestampValue: e.ts } };
+      ["type", "cat", "item", "source", "by", "note"].forEach(k => { fields[k] = histField(e[k] || ""); });
+      fields.old = histField(e.old); fields.new = histField(e.new);
+      return { update: { name: FS_DOCS_NAME + "/history/" + id, fields }, currentDocument: { exists: false } };
+    });
+    const r = await fetch(FS_DOCS + ":commit?key=" + FS_KEY, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ writes }) });
+    if (!r.ok) throw new Error(await r.text());
+    n += writes.length;
+  }
+  return n;
+}
+// Newest first. `limit` documents; the card filters client-side.
+async function fsLoadHistory(limit) {
+  const body = { structuredQuery: { from: [{ collectionId: "history" }], orderBy: [{ field: { fieldPath: "ts" }, direction: "DESCENDING" }], limit: limit || 2000 } };
+  const r = await fetch(FS_DOCS + ":runQuery?key=" + FS_KEY, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  const rows = (await r.json()).filter(x => x.document).map(x => {
+    const f = x.document.fields || {}, g = (k) => { const v = f[k]; if (!v) return null; if ("doubleValue" in v) return Number(v.doubleValue); if ("integerValue" in v) return Number(v.integerValue); if ("stringValue" in v) return v.stringValue; if ("timestampValue" in v) return v.timestampValue; return null; };
+    return { id: x.document.name.split("/").pop(), ts: g("ts"), type: g("type") || "", cat: g("cat") || "", item: g("item") || "", old: g("old"), new: g("new"), note: g("note") || "", source: g("source") || "", by: g("by") || "" };
+  });
+  return rows;
+}
+function historyCsv(rows) {
+  const esc = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const head = ["Date", "Time", "Type", "Category", "Item", "Old (retail)", "New (retail)", "Old (+VAT)", "New (+VAT)", "Note", "By", "Source"];
+  const vat = (p) => p == null ? "" : Math.round(Number(p) * 1.075 * 100) / 100;
+  const lines = rows.map(r => { const d = new Date(r.ts); return [d.toLocaleDateString("en-GB"), d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }), HISTORY_TYPES[r.type] || r.type, r.cat, r.item, r.old == null ? "" : r.old, r.new == null ? "" : r.new, vat(r.old), vat(r.new), r.note, r.by, r.source].map(esc).join(","); });
+  return "\ufeff" + head.map(esc).join(",") + "\n" + lines.join("\n");
+}
 // Compare two serialized price lists → [{ cat, name, oldPrice, newPrice, oldWas, newWas }] (null price = added/removed).
 function diffPriceLists(oldJson, newJson) {
   const index = (j) => {
@@ -620,6 +695,41 @@ function App() {
   // Slack price-change notifications (see fsGetNotify). `notify` = saved settings; `notifyForm` = the admin card.
   const [notify, setNotify] = useState(null);
   const [notifyForm, setNotifyForm] = useState({ url: "", label: "", msg: "", err: "", busy: false });
+  // Price history (admin card)
+  const [adminName, setAdminName] = useState(() => { try { return localStorage.getItem(ADMIN_NAME_KEY) || ""; } catch (e) { return ""; } });
+  const [hist, setHist] = useState({ rows: null, loading: false, err: "", from: "", to: "", cat: "", q: "", type: "", limit: 200, lastWrite: "" });
+  const setHistF = (patch) => setHist(h => ({ ...h, ...patch }));
+  const loadHistory = async () => {
+    setHistF({ loading: true, err: "" });
+    try { const rows = await fsLoadHistory(2000); setHistF({ rows, loading: false }); }
+    catch (e) { setHistF({ loading: false, err: "Could not load history: " + (e.message || e) }); }
+  };
+  const historyFiltered = useMemo(() => {
+    const rows = hist.rows || [];
+    const q = hist.q.trim().toLowerCase();
+    const from = hist.from ? new Date(hist.from + "T00:00:00") : null, to = hist.to ? new Date(hist.to + "T23:59:59.999") : null;
+    return rows.filter(r => {
+      const d = new Date(r.ts);
+      if (from && d < from) return false; if (to && d > to) return false;
+      if (hist.cat && r.cat !== hist.cat) return false;
+      if (hist.type && r.type !== hist.type) return false;
+      if (q && !((r.item + " " + r.cat + " " + r.note + " " + r.by).toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [hist.rows, hist.q, hist.from, hist.to, hist.cat, hist.type]);
+  const exportHistory = () => {
+    const csv = historyCsv(historyFiltered);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "tbl-price-history-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  };
+  // Record what a save changed. Never blocks or fails the save; tells the admin if the log could not be written.
+  const logHistory = async (beforeJson, afterJson, source) => {
+    try {
+      const entries = historyEntries(beforeJson, afterJson, source, adminName.trim());
+      if (!entries.length) return;
+      const n = await fsAddHistory(entries);
+      setHistF({ lastWrite: n + " change" + (n === 1 ? "" : "s") + " recorded " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }), rows: null });
+    } catch (e) { setHistF({ err: "Saved, but the price history could NOT be written: " + (e.message || e) }); }
+  };
   const saveNotify = async () => {
     const url = notifyForm.url.trim();
     if (url && !/^https:\/\/hooks\.slack\.com\/services\//.test(url)) return setNotifyForm(f => ({ ...f, err: "That doesn't look like a Slack incoming-webhook URL (it starts with https://hooks.slack.com/services/…).", msg: "" }));
@@ -1185,6 +1295,7 @@ function App() {
       await fsSet(payload);
       loadedValueRef.current = payload; setUpdateAvailable(false);
       setSaveStatus("saved");
+      logHistory(before, payload, "calculator admin panel"); // Firestore `history` — the permanent price-change log
       notifyPriceChanges(before, payload, "calculator admin panel"); // Slack, if a webhook is set up
     } catch(e) {
       setSaveStatus("error");
@@ -1203,7 +1314,7 @@ function App() {
     setShowReset(false);
     setSaveStatus("saved");
     loadedValueRef.current = payload; setUpdateAvailable(false);
-    try { await fsSet(payload); notifyPriceChanges(before, payload, "RESET TO DEFAULTS from the admin panel"); } catch(e) {}
+    try { await fsSet(payload); logHistory(before, payload, "RESET TO DEFAULTS from the admin panel"); notifyPriceChanges(before, payload, "RESET TO DEFAULTS from the admin panel"); } catch(e) {}
     setTimeout(() => setSaveStatus(""), 4000);
   };
 
@@ -1824,6 +1935,65 @@ function App() {
                 {notifyForm.err && <div style={{ fontSize: 12, color: "#e07070" }}>{notifyForm.err}</div>}
                 {notifyForm.msg && <div style={{ fontSize: 12, color: "#8aba8a" }}>{notifyForm.msg}</div>}
                 <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.5 }}>Clear the URL and Save to turn alerts off. Changes made directly in Firestore (not through this panel) are not posted — those still need a manual message.</div>
+              </div>
+            </details>
+          )}
+          {!adminSearch.trim() && (
+            <details style={{ background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }} onToggle={e => { if (e.target.open && !hist.rows && !hist.loading) loadHistory(); }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "#fff", fontWeight: 600, listStyle: "none" }}>📜 Price history <span style={{ fontSize: 10.5, color: "#666", fontWeight: 400, marginLeft: 8 }}>every price, item and category change, with the date — this app is the price list of record</span></summary>
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input className="fi" type="text" placeholder="Your name (saved with every change you make)" value={adminName} onChange={e => { setAdminName(e.target.value); try { localStorage.setItem(ADMIN_NAME_KEY, e.target.value); } catch (x) {} }} style={{ flex: 1, minWidth: 220, padding: "9px 12px", background: "#000", border: "1px solid " + (adminName.trim() ? "#2a2a2a" : "#7a5a2a"), borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: "inherit" }} />
+                  {hist.lastWrite && <span style={{ fontSize: 11, color: "#8aba8a" }}>✓ {hist.lastWrite}</span>}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <label style={{ fontSize: 11, color: "#777" }}>From <input className="fi" type="date" value={hist.from} onChange={e => setHistF({ from: e.target.value })} style={{ padding: "7px 9px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "inherit" }} /></label>
+                  <label style={{ fontSize: 11, color: "#777" }}>To <input className="fi" type="date" value={hist.to} onChange={e => setHistF({ to: e.target.value })} style={{ padding: "7px 9px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "inherit" }} /></label>
+                  <select value={hist.cat} onChange={e => setHistF({ cat: e.target.value })} style={{ padding: "8px 9px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "inherit", maxWidth: 220 }}>
+                    <option value="">All categories</option>
+                    {[...new Set([...(editData.catOrder || []), ...((hist.rows || []).map(r => r.cat))])].filter(Boolean).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select value={hist.type} onChange={e => setHistF({ type: e.target.value })} style={{ padding: "8px 9px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "inherit" }}>
+                    <option value="">All changes</option>
+                    {Object.entries(HISTORY_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                  <input className="fi" type="text" placeholder="Search item, note or name…" value={hist.q} onChange={e => setHistF({ q: e.target.value })} style={{ flex: 1, minWidth: 180, padding: "8px 12px", background: "#000", border: "1px solid #2a2a2a", borderRadius: 8, color: "#fff", fontSize: 12, fontFamily: "inherit" }} />
+                  <button onClick={loadHistory} disabled={hist.loading} style={{ ...b, padding: "8px 14px", background: "transparent", border: "1px solid " + PINK, borderRadius: 8, color: PINK, fontSize: 12, fontWeight: 700, opacity: hist.loading ? 0.6 : 1 }}>{hist.loading ? "Loading…" : "Refresh"}</button>
+                  <button onClick={exportHistory} disabled={!historyFiltered.length} style={{ ...b, padding: "8px 14px", background: PINK, border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, opacity: historyFiltered.length ? 1 : 0.5 }}>Export CSV</button>
+                </div>
+                {hist.err && <div style={{ fontSize: 12, color: "#e07070" }}>{hist.err}</div>}
+                {hist.rows && <div style={{ fontSize: 11, color: "#777" }}>{historyFiltered.length} of {hist.rows.length} entries{hist.rows.length >= 2000 ? " (showing the latest 2,000 — narrow the dates or export)" : ""}</div>}
+                {hist.rows && historyFiltered.length > 0 && (
+                  <div style={{ overflowX: "auto", maxHeight: 520, overflowY: "auto", border: "1px solid #222", borderRadius: 8 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead><tr style={{ position: "sticky", top: 0, background: "#111" }}>{["When", "Change", "Category › Item", "Old → New (retail · +VAT)", "Note", "By"].map(h => <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: "#888", fontWeight: 600, fontSize: 10.5, letterSpacing: 0.4, textTransform: "uppercase", borderBottom: "1px solid #222", whiteSpace: "nowrap" }}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {historyFiltered.slice(0, hist.limit).map(r => {
+                          const d = new Date(r.ts); const vat = (p) => fmt(Math.round(Number(p) * 1.075 * 100) / 100);
+                          const col = { price: "#f3c2d7", added: "#8aba8a", removed: "#e07070", renamed: "#9ab8e0", lock: "#e0c070", unlock: "#e0c070", cat_added: "#8aba8a", cat_removed: "#e07070", import: "#888" }[r.type] || "#aaa";
+                          let change = "";
+                          if (r.type === "price" || r.type === "renamed") change = (r.old != null ? fmt(r.old) + " → " : "") + fmt(r.new) + " · +VAT " + (r.old != null ? vat(r.old) + " → " : "") + vat(r.new);
+                          else if (r.type === "added" || r.type === "import") change = r.new != null ? fmt(r.new) + " · +VAT " + vat(r.new) + (r.old != null ? " (was " + fmt(r.old) + ")" : "") : "";
+                          else if (r.type === "removed") change = r.old != null ? "was " + fmt(r.old) : "";
+                          else if (r.type === "lock") change = "was-price " + fmt(r.new);
+                          return (
+                            <tr key={r.id} style={{ borderBottom: "1px solid #1a1a1a" }}>
+                              <td style={{ padding: "7px 10px", whiteSpace: "nowrap", color: "#bbb" }}>{d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}<span style={{ color: "#555", marginLeft: 6 }}>{d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span></td>
+                              <td style={{ padding: "7px 10px", whiteSpace: "nowrap" }}><span style={{ color: col, fontWeight: 600, fontSize: 11 }}>{HISTORY_TYPES[r.type] || r.type}</span></td>
+                              <td style={{ padding: "7px 10px", color: "#eee" }}><span style={{ color: "#777" }}>{r.cat}{r.item ? " › " : ""}</span>{r.item}</td>
+                              <td style={{ padding: "7px 10px", whiteSpace: "nowrap", color: "#ddd" }}>{change}</td>
+                              <td style={{ padding: "7px 10px", color: "#999", maxWidth: 320 }}>{r.note}</td>
+                              <td style={{ padding: "7px 10px", whiteSpace: "nowrap", color: "#999" }}>{r.by}{r.source && r.source !== "calculator admin panel" ? <span style={{ color: "#555" }}> · {r.source}</span> : ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {historyFiltered.length > hist.limit && <button onClick={() => setHistF({ limit: hist.limit + 200 })} style={{ ...b, width: "100%", padding: 10, background: "#111", border: "none", borderTop: "1px solid #222", color: PINK, fontSize: 12 }}>Show more ({historyFiltered.length - hist.limit} more)</button>}
+                  </div>
+                )}
+                {hist.rows && historyFiltered.length === 0 && <div style={{ fontSize: 12, color: "#666" }}>No entries match these filters.</div>}
+                <div style={{ fontSize: 10.5, color: "#555", lineHeight: 1.5 }}>Entries are written automatically on every <b>Save All</b> and <b>Reset</b>. Entries dated before 26 Nov 2026 were imported from the old Google Sheet's Price Change Log (shown in the By column). Prices are retail; +VAT is 7.5%.</div>
               </div>
             </details>
           )}
